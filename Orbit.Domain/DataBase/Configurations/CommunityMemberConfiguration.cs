@@ -28,7 +28,7 @@ public class CommunityMemberConfiguration : IEntityTypeConfiguration<CommunityMe
 
         builder.Property(m => m.JoinedAt)
             .HasColumnName("joined_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(m => new { m.CommunityId, m.ProfileId })
             .IsUnique()

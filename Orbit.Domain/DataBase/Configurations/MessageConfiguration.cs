@@ -38,7 +38,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.Property(m => m.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(m => m.DeletedAt)
             .HasColumnName("deleted_at");

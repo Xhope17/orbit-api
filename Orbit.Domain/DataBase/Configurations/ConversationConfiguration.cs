@@ -20,6 +20,6 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
 
         builder.Property(c => c.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
     }
 }

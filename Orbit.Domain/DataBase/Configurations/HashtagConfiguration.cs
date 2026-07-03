@@ -19,7 +19,7 @@ public class HashtagConfiguration : IEntityTypeConfiguration<Hashtag>
 
         builder.Property(h => h.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(h => h.Name)
             .IsUnique()

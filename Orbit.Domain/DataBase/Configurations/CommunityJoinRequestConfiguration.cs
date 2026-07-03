@@ -28,7 +28,7 @@ public class CommunityJoinRequestConfiguration : IEntityTypeConfiguration<Commun
 
         builder.Property(r => r.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(r => r.RespondedAt)
             .HasColumnName("responded_at");

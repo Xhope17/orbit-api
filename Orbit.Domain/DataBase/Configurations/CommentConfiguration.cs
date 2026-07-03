@@ -42,11 +42,11 @@ public class CommentConfiguration : IEntityTypeConfiguration<Comment>
 
         builder.Property(c => c.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(c => c.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(c => c.Profile)
             .WithMany()

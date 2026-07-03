@@ -53,7 +53,7 @@ public class PostMediaConfiguration : IEntityTypeConfiguration<PostMedia>
 
         builder.Property(pm => pm.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(pm => pm.Post)
             .WithMany(p => p.PostMedia)

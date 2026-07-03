@@ -6,6 +6,12 @@ using Orbit.WebApi.Extensions;
 using Orbit.WebApi.Hubs;
 using Orbit.WebApi.Middlewares;
 
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
+if (File.Exists(envPath))
+{
+    DotNetEnv.Env.Load(envPath);
+}
+
 var frontendUrl = Environment.GetEnvironmentVariable(EnvironmentConstants.FrontendUrl);
 var frontendUrlDev = Environment.GetEnvironmentVariable(EnvironmentConstants.FrontendUrlDev);
 

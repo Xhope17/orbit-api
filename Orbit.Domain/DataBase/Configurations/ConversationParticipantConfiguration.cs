@@ -22,7 +22,7 @@ public class ConversationParticipantConfiguration : IEntityTypeConfiguration<Con
 
         builder.Property(cp => cp.JoinedAt)
             .HasColumnName("joined_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(cp => cp.Conversation)
             .WithMany(c => c.Participants)

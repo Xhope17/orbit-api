@@ -22,7 +22,7 @@ public class FollowConfiguration : IEntityTypeConfiguration<Follow>
 
         builder.Property(f => f.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(f => f.Follower)
             .WithMany()

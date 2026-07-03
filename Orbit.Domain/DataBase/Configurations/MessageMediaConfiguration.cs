@@ -49,7 +49,7 @@ public class MessageMediaConfiguration : IEntityTypeConfiguration<MessageMedia>
 
         builder.Property(mm => mm.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(mm => mm.Message)
             .WithMany(m => m.MessageMedia)

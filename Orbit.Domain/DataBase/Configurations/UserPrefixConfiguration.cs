@@ -27,7 +27,7 @@ public class UserPrefixConfiguration : IEntityTypeConfiguration<UserPrefix>
 
         builder.Property(p => p.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(p => p.Name)
             .IsUnique()

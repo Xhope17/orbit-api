@@ -22,7 +22,7 @@ public class UserBanConfiguration : IEntityTypeConfiguration<UserBan>
 
         builder.Property(b => b.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(b => b.Blocker)
             .WithMany()

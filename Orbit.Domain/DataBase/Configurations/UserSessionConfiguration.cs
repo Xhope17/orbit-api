@@ -32,7 +32,7 @@ public class UserSessionConfiguration : IEntityTypeConfiguration<UserSession>
 
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(s => s.AuthUserId)
             .HasDatabaseName("ix_user_sessions_auth_user");
@@ -40,7 +40,7 @@ public class UserSessionConfiguration : IEntityTypeConfiguration<UserSession>
         builder.HasIndex(s => s.TokenKey)
             .HasDatabaseName("ix_user_sessions_token_key")
             .IsUnique()
-            .HasFilter("[token_key] IS NOT NULL");
+            .HasFilter("\"token_key\" IS NOT NULL");
 
         builder.HasQueryFilter(s => s.AuthUser.IsActive);
 

@@ -53,11 +53,11 @@ public class PostConfiguration : IEntityTypeConfiguration<Post>
 
         builder.Property(p => p.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(p => p.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(p => p.ProfileId)
             .HasDatabaseName("ix_posts_profile_id");

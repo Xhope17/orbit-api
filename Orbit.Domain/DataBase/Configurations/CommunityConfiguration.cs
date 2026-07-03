@@ -52,11 +52,11 @@ public class CommunityConfiguration : IEntityTypeConfiguration<Community>
 
         builder.Property(c => c.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(c => c.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(c => c.Slug)
             .IsUnique()

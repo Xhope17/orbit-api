@@ -22,7 +22,7 @@ public class PostLikeConfiguration : IEntityTypeConfiguration<PostLike>
 
         builder.Property(pl => pl.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(pl => pl.Profile)
             .WithMany()

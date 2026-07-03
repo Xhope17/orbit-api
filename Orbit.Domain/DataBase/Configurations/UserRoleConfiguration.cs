@@ -14,7 +14,7 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
 
         builder.Property(ur => ur.Id)
             .HasColumnName("id")
-            .HasDefaultValueSql("NEWID()");
+            .HasDefaultValueSql("gen_random_uuid()");
 
         builder.Property(ur => ur.ProfileId)
             .HasColumnName("profile_id")
@@ -26,7 +26,7 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
 
         builder.Property(ur => ur.AssignedAt)
             .HasColumnName("assigned_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(ur => new { ur.ProfileId, ur.RoleId })
             .IsUnique()

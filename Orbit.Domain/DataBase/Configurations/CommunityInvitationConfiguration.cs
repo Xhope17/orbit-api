@@ -32,7 +32,7 @@ public class CommunityInvitationConfiguration : IEntityTypeConfiguration<Communi
 
         builder.Property(i => i.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(i => i.RespondedAt)
             .HasColumnName("responded_at");

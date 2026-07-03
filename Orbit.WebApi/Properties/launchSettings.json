@@ -8,8 +8,7 @@
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5230",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "DATABASE_CONNECTION": ""
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
     "https": {

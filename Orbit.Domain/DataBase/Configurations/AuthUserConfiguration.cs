@@ -32,11 +32,11 @@ public class AuthUserConfiguration : IEntityTypeConfiguration<AuthUser>
 
         builder.Property(u => u.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(u => u.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(u => u.Email)
             .IsUnique()

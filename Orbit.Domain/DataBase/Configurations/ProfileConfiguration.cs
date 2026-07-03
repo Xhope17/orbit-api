@@ -102,11 +102,11 @@ public class ProfileConfiguration : IEntityTypeConfiguration<Profile>
 
         builder.Property(p => p.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(p => p.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(p => p.AuthUserId)
             .IsUnique()

@@ -24,7 +24,7 @@ public class EmailTemplateConfiguration : IEntityTypeConfiguration<EmailTemplate
 
         builder.Property(t => t.HtmlBody)
             .HasColumnName("html_body")
-            .HasColumnType("NVARCHAR(MAX)")
+            .HasColumnType("TEXT")
             .IsRequired();
 
         builder.Property(t => t.IsActive)
@@ -33,11 +33,11 @@ public class EmailTemplateConfiguration : IEntityTypeConfiguration<EmailTemplate
 
         builder.Property(t => t.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.Property(t => t.UpdatedAt)
             .HasColumnName("updated_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasIndex(t => t.Name)
             .IsUnique()

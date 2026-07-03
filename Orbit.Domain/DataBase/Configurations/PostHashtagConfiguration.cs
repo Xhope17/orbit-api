@@ -22,7 +22,7 @@ public class PostHashtagConfiguration : IEntityTypeConfiguration<PostHashtag>
 
         builder.Property(ph => ph.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(ph => ph.Post)
             .WithMany()

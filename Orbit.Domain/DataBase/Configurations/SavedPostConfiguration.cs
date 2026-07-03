@@ -22,7 +22,7 @@ public class SavedPostConfiguration : IEntityTypeConfiguration<SavedPost>
 
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(s => s.Profile)
             .WithMany(p => p.SavedPosts)

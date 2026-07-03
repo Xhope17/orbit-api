@@ -22,7 +22,7 @@ public class CommentLikeConfiguration : IEntityTypeConfiguration<CommentLike>
 
         builder.Property(cl => cl.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("SYSUTCDATETIME()");
+            .HasDefaultValueSql("NOW()");
 
         builder.HasOne(cl => cl.Profile)
             .WithMany()
