@@ -1,6 +1,8 @@
 using Scalar.AspNetCore;
 using Serilog;
 using Orbit.Application.Constants;
+using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Interfaces.Repositories;
 using Orbit.Shared.Constants;
 using Orbit.WebApi.Extensions;
 using Orbit.WebApi.Hubs;
@@ -21,6 +23,8 @@ if (!string.IsNullOrWhiteSpace(frontendUrlDev) && frontendUrlDev != frontendUrl)
 
 if (frontendUrls.Count == 0)
     frontendUrls.Add("http://localhost:4200");
+
+Log.Logger.Information("CORS origins: {Origins}", frontendUrls);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -78,6 +82,49 @@ if (app.Environment.IsDevelopment())
     {
         options.WithTitle("Orbit API").WithTheme(ScalarTheme.Purple);
     });
+    Console.WriteLine("Scalar: http://localhost:5230/scalar");
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
+    var userRepo = scope.ServiceProvider.GetRequiredService<IGenericRepository<Orbit.Domain.Entities.AuthUser>>();
+
+    var anyUser = await userRepo.FirstOrDefaultAsync(u => true);
+    if (anyUser is null)
+    {
+        var result = await authService.RegisterAsync(
+            "firstuser@gmail.com", "admin", "Admin",
+            "Adminadmin1", null, null, null
+        );
+
+        if (result.IsSuccess)
+        {
+            var profileRepo = scope.ServiceProvider.GetRequiredService<IGenericRepository<Orbit.Domain.Entities.Profile>>();
+            var roleRepo = scope.ServiceProvider.GetRequiredService<IGenericRepository<Orbit.Domain.Entities.Role>>();
+            var userRoleRepo = scope.ServiceProvider.GetRequiredService<IGenericRepository<Orbit.Domain.Entities.UserRole>>();
+
+            var profile = await profileRepo.FirstOrDefaultAsync(p => p.Username == "admin");
+            var adminRole = await roleRepo.FirstOrDefaultAsync(r => r.Name == "admin");
+
+            if (profile is not null && adminRole is not null)
+            {
+                var existingUserRole = await userRoleRepo.FirstOrDefaultAsync(ur => ur.ProfileId == profile.Id && ur.RoleId == adminRole.Id);
+                if (existingUserRole is null)
+                {
+                    var adminAssignment = new Orbit.Domain.Entities.UserRole
+                    {
+                        Id = Guid.NewGuid(),
+                        ProfileId = profile.Id,
+                        RoleId = adminRole.Id,
+                        AssignedAt = DateTime.UtcNow,
+                    };
+                    await userRoleRepo.AddEntityAsync(adminAssignment);
+                    await userRoleRepo.SaveChangesAsync();
+                }
+            }
+        }
+    }
 }
 
 app.Run();
