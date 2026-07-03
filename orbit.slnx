@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Orbit.Application/Orbit.Application.csproj" />
+  <Project Path="Orbit.Domain/Orbit.Domain.csproj" Id="366f6d6e-7f2f-4610-8a19-e54fdd9dbb8a" />
+  <Project Path="Orbit.Infrastructure/Orbit.Infrastructure.csproj" Id="965558a4-a885-4f1a-9707-380bfb8c86ca" />
+  <Project Path="Orbit.Shared/Orbit.Shared.csproj" />
+  <Project Path="Orbit.WebApi/Orbit.WebApi.csproj" />
+</Solution>
