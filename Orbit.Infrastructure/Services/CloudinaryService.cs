@@ -37,7 +37,7 @@ public class CloudinaryService : ICloudinaryService
         try
         {
             var folderPath = FolderMap[folder];
-            var publicId = $"{folderPath}/{fileName}";
+            var publicId = Path.GetFileNameWithoutExtension(fileName);
             var isVideo = IsVideo(contentType, fileName);
 
             if (isVideo)
