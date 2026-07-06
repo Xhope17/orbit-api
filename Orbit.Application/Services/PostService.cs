@@ -573,8 +573,11 @@ public class PostService : IPostService
         var originalAuthor = BuildAuthorResponse(originalPost.Profile);
         var originalPostResponse = BuildPostResponse(originalPost, originalAuthor, false, false, originalMedia);
 
-        await _notificationChannel.Channel.Writer.WriteAsync(new NotificationEvent(
-            originalPost.ProfileId, "repost", profile.Id, originalPost.Id, null, originalPost.Content, null));
+        if (originalPost.ProfileId != profile.Id)
+        {
+            await _notificationChannel.Channel.Writer.WriteAsync(new NotificationEvent(
+                originalPost.ProfileId, "repost", profile.Id, originalPost.Id, null, originalPost.Content, null));
+        }
 
         var author = BuildAuthorResponse(profile);
         return Result<PostResponse>.Success(BuildPostResponse(repost, author, false, false, [], originalPostResponse));
