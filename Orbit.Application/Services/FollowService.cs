@@ -3,47 +3,40 @@ using Orbit.Application.Constants;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.Entities;
-using Orbit.Domain.Interfaces.Repositories;
+using Orbit.Domain.DataBase;
 
 namespace Orbit.Application.Services;
 
 public class FollowService : IFollowService
 {
-    private readonly IGenericRepository<Follow> _followRepo;
-    private readonly IGenericRepository<Profile> _profileRepo;
-    private readonly IGenericRepository<UserBan> _userBanRepo;
+    private readonly IUnitOfWork _uow;
 
-    public FollowService(
-        IGenericRepository<Follow> followRepo,
-        IGenericRepository<Profile> profileRepo,
-        IGenericRepository<UserBan> userBanRepo)
+    public FollowService(IUnitOfWork uow)
     {
-        _followRepo = followRepo;
-        _profileRepo = profileRepo;
-        _userBanRepo = userBanRepo;
+        _uow = uow;
     }
 
     public async Task<Result> FollowUserAsync(Guid followerProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
-        var targetProfile = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == slug);
+        var targetProfile = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
         if (targetProfile is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
         if (targetProfile.Id == followerProfileId)
             return Result.Failure(ResponseMessages.CannotFollowYourself);
 
-        var blockedByTarget = await _userBanRepo.FirstOrDefaultAsync(b =>
+        var blockedByTarget = await _uow.UserBanRepository.Get(b =>
             b.BlockerProfileId == targetProfile.Id && b.BlockedProfileId == followerProfileId);
         if (blockedByTarget is not null)
             return Result.Failure(ResponseMessages.CannotFollowBlockedByUser);
 
-        var followerBlockedTarget = await _userBanRepo.FirstOrDefaultAsync(b =>
+        var followerBlockedTarget = await _uow.UserBanRepository.Get(b =>
             b.BlockerProfileId == followerProfileId && b.BlockedProfileId == targetProfile.Id);
         if (followerBlockedTarget is not null)
             return Result.Failure(ResponseMessages.CannotFollowBlockedUser);
 
-        var existingFollow = await _followRepo.FirstOrDefaultAsync(f =>
+        var existingFollow = await _uow.FollowRepository.Get(f =>
             f.FollowerId == followerProfileId && f.FollowingId == targetProfile.Id);
         if (existingFollow is not null)
             return Result.Failure(ResponseMessages.AlreadyFollowing);
@@ -56,20 +49,20 @@ public class FollowService : IFollowService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _followRepo.CreateAsync(follow);
+        await _uow.FollowRepository.Create(follow);
 
         targetProfile.FollowersCount++;
         targetProfile.UpdatedAt = DateTime.UtcNow;
-        _profileRepo.Update(targetProfile);
-        await _profileRepo.SaveChangesAsync();
+        await _uow.ProfileRepository.Update(targetProfile);
+        await _uow.SaveChangesAsync();
 
-        var followerProfile = await _profileRepo.GetByIdAsync(followerProfileId);
+        var followerProfile = await _uow.ProfileRepository.Get(p => p.Id == followerProfileId);
         if (followerProfile is not null)
         {
             followerProfile.FollowingCount++;
             followerProfile.UpdatedAt = DateTime.UtcNow;
-            _profileRepo.Update(followerProfile);
-            await _profileRepo.SaveChangesAsync();
+            await _uow.ProfileRepository.Update(followerProfile);
+            await _uow.SaveChangesAsync();
         }
 
         return Result.Success(ResponseMessages.FollowSuccessful);
@@ -78,29 +71,29 @@ public class FollowService : IFollowService
     public async Task<Result> UnfollowUserAsync(Guid followerProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
-        var targetProfile = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == slug);
+        var targetProfile = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
         if (targetProfile is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
-        var follow = await _followRepo.FirstOrDefaultAsync(f =>
+        var follow = await _uow.FollowRepository.Get(f =>
             f.FollowerId == followerProfileId && f.FollowingId == targetProfile.Id);
         if (follow is null)
             return Result.Failure(ResponseMessages.NotFollowing);
 
-        await _followRepo.DeleteAsync(follow.Id);
+        await _uow.FollowRepository.Delete(follow);
 
         targetProfile.FollowersCount = Math.Max(0, targetProfile.FollowersCount - 1);
         targetProfile.UpdatedAt = DateTime.UtcNow;
-        _profileRepo.Update(targetProfile);
-        await _profileRepo.SaveChangesAsync();
+        await _uow.ProfileRepository.Update(targetProfile);
+        await _uow.SaveChangesAsync();
 
-        var followerProfile = await _profileRepo.GetByIdAsync(followerProfileId);
+        var followerProfile = await _uow.ProfileRepository.Get(p => p.Id == followerProfileId);
         if (followerProfile is not null)
         {
             followerProfile.FollowingCount = Math.Max(0, followerProfile.FollowingCount - 1);
             followerProfile.UpdatedAt = DateTime.UtcNow;
-            _profileRepo.Update(followerProfile);
-            await _profileRepo.SaveChangesAsync();
+            await _uow.ProfileRepository.Update(followerProfile);
+            await _uow.SaveChangesAsync();
         }
 
         return Result.Success(ResponseMessages.UnfollowSuccessful);
@@ -110,18 +103,18 @@ public class FollowService : IFollowService
         string username, Guid? currentProfileId, int page, int pageSize)
     {
         var slug = username.ToLowerInvariant();
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == slug);
+        var profile = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
         if (profile is null)
             return Result<PagedResult<PostAuthorResponse>>.Failure(ResponseMessages.ProfileNotFound);
 
         var skip = (page - 1) * pageSize;
-        var followers = await _followRepo.GetPagedAsync(
+        var followers = await _uow.FollowRepository.GetPagedAsync(
             f => f.FollowingId == profile.Id,
             f => f.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _followRepo.CountAsync(f => f.FollowingId == profile.Id);
+        var totalCount = await _uow.FollowRepository.CountAsync(f => f.FollowingId == profile.Id);
 
         var items = await BuildAuthorResponseList(followers, f => f.FollowerId, currentProfileId);
         return Result<PagedResult<PostAuthorResponse>>.Success(new PagedResult<PostAuthorResponse>
@@ -137,18 +130,18 @@ public class FollowService : IFollowService
         string username, Guid? currentProfileId, int page, int pageSize)
     {
         var slug = username.ToLowerInvariant();
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == slug);
+        var profile = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
         if (profile is null)
             return Result<PagedResult<PostAuthorResponse>>.Failure(ResponseMessages.ProfileNotFound);
 
         var skip = (page - 1) * pageSize;
-        var following = await _followRepo.GetPagedAsync(
+        var following = await _uow.FollowRepository.GetPagedAsync(
             f => f.FollowerId == profile.Id,
             f => f.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _followRepo.CountAsync(f => f.FollowerId == profile.Id);
+        var totalCount = await _uow.FollowRepository.CountAsync(f => f.FollowerId == profile.Id);
 
         var items = await BuildAuthorResponseList(following, f => f.FollowingId, currentProfileId);
         return Result<PagedResult<PostAuthorResponse>>.Success(new PagedResult<PostAuthorResponse>
@@ -165,14 +158,14 @@ public class FollowService : IFollowService
     {
         var profileIds = follows.Select(profileIdSelector).Distinct().ToList();
         var profiles = profileIds.Count > 0
-            ? await _profileRepo.GetListAsync(p => profileIds.Contains(p.Id))
+            ? await _uow.ProfileRepository.GetListAsync(p => profileIds.Contains(p.Id))
             : [];
         var profileMap = profiles.ToDictionary(p => p.Id);
 
         HashSet<Guid> followedIds = [];
         if (currentProfileId.HasValue)
         {
-            var existingFollows = await _followRepo.GetListAsync(f =>
+            var existingFollows = await _uow.FollowRepository.GetListAsync(f =>
                 f.FollowerId == currentProfileId.Value && profileIds.Contains(f.FollowingId));
             followedIds = existingFollows.Select(f => f.FollowingId).ToHashSet();
         }
