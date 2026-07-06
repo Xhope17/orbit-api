@@ -4,85 +4,57 @@ using Orbit.Domain.Interfaces.Repositories;
 
 namespace Orbit.Infrastructure.Persistence.Database;
 
-public class UnitOfWork : IUnitOfWork
+public class UnitOfWork(OrbitDbContext _context,
+    IAuthUserRepository _authUserRepository,
+    IProfileRepository _profileRepository,
+    IPostRepository _postRepository,
+    ICommentRepository _commentRepository,
+    ICommentLikeRepository _commentLikeRepository,
+    IPostLikeRepository _postLikeRepository,
+    IPostMediaRepository _postMediaRepository,
+    IFollowRepository _followRepository,
+    ISavedPostRepository _savedPostRepository,
+    IUserBanRepository _userBanRepository,
+    IRoleRepository _roleRepository,
+    IUserRoleRepository _userRoleRepository,
+    IUserSessionRepository _userSessionRepository,
+    IUserPrefixRepository _userPrefixRepository,
+    IEmailTemplateRepository _emailTemplateRepository,
+    ICommunityRepository _communityRepository,
+    ICommunityMemberRepository _communityMemberRepository,
+    ICommunityJoinRequestRepository _communityJoinRequestRepository,
+    ICommunityInvitationRepository _communityInvitationRepository,
+    IHashtagRepository _hashtagRepository,
+    IPostHashtagRepository _postHashtagRepository,
+    INotificationRepository _notificationRepository)
+    : IUnitOfWork
 {
-    private readonly OrbitDbContext _context;
-
-    public UnitOfWork(
-        OrbitDbContext context,
-        IAuthUserRepository authUserRepository,
-        IProfileRepository profileRepository,
-        IPostRepository postRepository,
-        ICommentRepository commentRepository,
-        ICommentLikeRepository commentLikeRepository,
-        IPostLikeRepository postLikeRepository,
-        IPostMediaRepository postMediaRepository,
-        IFollowRepository followRepository,
-        ISavedPostRepository savedPostRepository,
-        IUserBanRepository userBanRepository,
-        IRoleRepository roleRepository,
-        IUserRoleRepository userRoleRepository,
-        IUserSessionRepository userSessionRepository,
-        IUserPrefixRepository userPrefixRepository,
-        IEmailTemplateRepository emailTemplateRepository,
-        ICommunityRepository communityRepository,
-        ICommunityMemberRepository communityMemberRepository,
-        ICommunityJoinRequestRepository communityJoinRequestRepository,
-        ICommunityInvitationRepository communityInvitationRepository,
-        IHashtagRepository hashtagRepository,
-        IPostHashtagRepository postHashtagRepository,
-        INotificationRepository notificationRepository)
-    {
-        _context = context;
-        AuthUserRepository = authUserRepository;
-        ProfileRepository = profileRepository;
-        PostRepository = postRepository;
-        CommentRepository = commentRepository;
-        CommentLikeRepository = commentLikeRepository;
-        PostLikeRepository = postLikeRepository;
-        PostMediaRepository = postMediaRepository;
-        FollowRepository = followRepository;
-        SavedPostRepository = savedPostRepository;
-        UserBanRepository = userBanRepository;
-        RoleRepository = roleRepository;
-        UserRoleRepository = userRoleRepository;
-        UserSessionRepository = userSessionRepository;
-        UserPrefixRepository = userPrefixRepository;
-        EmailTemplateRepository = emailTemplateRepository;
-        CommunityRepository = communityRepository;
-        CommunityMemberRepository = communityMemberRepository;
-        CommunityJoinRequestRepository = communityJoinRequestRepository;
-        CommunityInvitationRepository = communityInvitationRepository;
-        HashtagRepository = hashtagRepository;
-        PostHashtagRepository = postHashtagRepository;
-        NotificationRepository = notificationRepository;
-    }
-
-    public IAuthUserRepository AuthUserRepository { get; }
-    public IProfileRepository ProfileRepository { get; }
-    public IPostRepository PostRepository { get; }
-    public ICommentRepository CommentRepository { get; }
-    public ICommentLikeRepository CommentLikeRepository { get; }
-    public IPostLikeRepository PostLikeRepository { get; }
-    public IPostMediaRepository PostMediaRepository { get; }
-    public IFollowRepository FollowRepository { get; }
-    public ISavedPostRepository SavedPostRepository { get; }
-    public IUserBanRepository UserBanRepository { get; }
-    public IRoleRepository RoleRepository { get; }
-    public IUserRoleRepository UserRoleRepository { get; }
-    public IUserSessionRepository UserSessionRepository { get; }
-    public IUserPrefixRepository UserPrefixRepository { get; }
-    public IEmailTemplateRepository EmailTemplateRepository { get; }
-    public ICommunityRepository CommunityRepository { get; }
-    public ICommunityMemberRepository CommunityMemberRepository { get; }
-    public ICommunityJoinRequestRepository CommunityJoinRequestRepository { get; }
-    public ICommunityInvitationRepository CommunityInvitationRepository { get; }
-    public IHashtagRepository HashtagRepository { get; }
-    public IPostHashtagRepository PostHashtagRepository { get; }
-    public INotificationRepository NotificationRepository { get; }
+    private readonly OrbitDbContext context = _context;
+    public IAuthUserRepository authUserRepository { get; set; } = _authUserRepository;
+    public IProfileRepository profileRepository { get; set; } = _profileRepository;
+    public IPostRepository postRepository { get; set; } = _postRepository;
+    public ICommentRepository commentRepository { get; set; } = _commentRepository;
+    public ICommentLikeRepository commentLikeRepository { get; set; } = _commentLikeRepository;
+    public IPostLikeRepository postLikeRepository { get; set; } = _postLikeRepository;
+    public IPostMediaRepository postMediaRepository { get; set; } = _postMediaRepository;
+    public IFollowRepository followRepository { get; set; } = _followRepository;
+    public ISavedPostRepository savedPostRepository { get; set; } = _savedPostRepository;
+    public IUserBanRepository userBanRepository { get; set; } = _userBanRepository;
+    public IRoleRepository roleRepository { get; set; } = _roleRepository;
+    public IUserRoleRepository userRoleRepository { get; set; } = _userRoleRepository;
+    public IUserSessionRepository userSessionRepository { get; set; } = _userSessionRepository;
+    public IUserPrefixRepository userPrefixRepository { get; set; } = _userPrefixRepository;
+    public IEmailTemplateRepository emailTemplateRepository { get; set; } = _emailTemplateRepository;
+    public ICommunityRepository communityRepository { get; set; } = _communityRepository;
+    public ICommunityMemberRepository communityMemberRepository { get; set; } = _communityMemberRepository;
+    public ICommunityJoinRequestRepository communityJoinRequestRepository { get; set; } = _communityJoinRequestRepository;
+    public ICommunityInvitationRepository communityInvitationRepository { get; set; } = _communityInvitationRepository;
+    public IHashtagRepository hashtagRepository { get; set; } = _hashtagRepository;
+    public IPostHashtagRepository postHashtagRepository { get; set; } = _postHashtagRepository;
+    public INotificationRepository notificationRepository { get; set; } = _notificationRepository;
 
     public async Task SaveChangesAsync()
     {
-        await _context.SaveChangesAsync();
+        await context.SaveChangesAsync();
     }
 }
