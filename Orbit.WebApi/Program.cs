@@ -91,7 +91,7 @@ using (var scope = app.Services.CreateScope())
     var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
     var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-    var anyUser = await uow.AuthUserRepository.Get(u => u.Id != Guid.Empty);
+    var anyUser = await uow.authUserRepository.Get(u => u.Id != Guid.Empty);
     if (anyUser is null)
     {
         var result = await authService.RegisterAsync(
@@ -101,12 +101,12 @@ using (var scope = app.Services.CreateScope())
 
         if (result.IsSuccess)
         {
-            var profile = await uow.ProfileRepository.Get(p => p.Username == "admin");
-            var adminRole = await uow.RoleRepository.Get(r => r.Name == "admin");
+            var profile = await uow.profileRepository.Get(p => p.Username == "admin");
+            var adminRole = await uow.roleRepository.Get(r => r.Name == "admin");
 
             if (profile is not null && adminRole is not null)
             {
-                var existingUserRole = await uow.UserRoleRepository.Get(ur =>
+                var existingUserRole = await uow.userRoleRepository.Get(ur =>
                     ur.ProfileId == profile.Id && ur.RoleId == adminRole.Id);
                 if (existingUserRole is null)
                 {
@@ -117,7 +117,7 @@ using (var scope = app.Services.CreateScope())
                         RoleId = adminRole.Id,
                         AssignedAt = DateTime.UtcNow,
                     };
-                    await uow.UserRoleRepository.Create(adminAssignment);
+                    await uow.userRoleRepository.Create(adminAssignment);
                     await uow.SaveChangesAsync();
                 }
             }

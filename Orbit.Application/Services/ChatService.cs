@@ -23,7 +23,7 @@ public class ChatService : IChatService
     public async Task<Result<ChatResponse>> CreateConversationAsync(Guid currentProfileId, string targetUsername)
     {
         var slug = targetUsername.ToLowerInvariant();
-        var targetProfile = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var targetProfile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (targetProfile is null)
             return Result<ChatResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -146,7 +146,7 @@ public class ChatService : IChatService
 
     public async Task<ChatProfileInfo?> GetProfileInfoAsync(Guid profileId)
     {
-        var profile = await _uow.ProfileRepository.Get(p => p.Id == profileId);
+        var profile = await _uow.profileRepository.Get(p => p.Id == profileId);
         if (profile is null) return null;
         return new ChatProfileInfo(profile.Id, profile.Username, profile.DisplayName, profile.ProfilePictureUrl);
     }

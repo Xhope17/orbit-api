@@ -19,11 +19,11 @@ public class HashtagService : IHashtagService
     {
         var tags = HashtagHelper.ExtractHashtags(content);
 
-        var existingLinks = await _uow.PostHashtagRepository.GetListAsync(ph => ph.PostId == postId);
+        var existingLinks = await _uow.postHashtagRepository.GetListAsync(ph => ph.PostId == postId);
         if (existingLinks.Count > 0)
         {
             foreach (var link in existingLinks)
-                await _uow.PostHashtagRepository.Delete(link);
+                await _uow.postHashtagRepository.Delete(link);
         }
 
         if (tags.Count == 0)
@@ -32,7 +32,7 @@ public class HashtagService : IHashtagService
             return;
         }
 
-        var existingHashtags = await _uow.HashtagRepository.GetListAsync(h => tags.Contains(h.Name));
+        var existingHashtags = await _uow.hashtagRepository.GetListAsync(h => tags.Contains(h.Name));
         var hashtagByName = existingHashtags.ToDictionary(h => h.Name);
 
         var now = DateTime.UtcNow;
@@ -47,11 +47,11 @@ public class HashtagService : IHashtagService
                     Name = tagName,
                     CreatedAt = now,
                 };
-                await _uow.HashtagRepository.Create(hashtag);
+                await _uow.hashtagRepository.Create(hashtag);
                 hashtagByName[tagName] = hashtag;
             }
 
-            await _uow.PostHashtagRepository.Create(new PostHashtag
+            await _uow.postHashtagRepository.Create(new PostHashtag
             {
                 PostId = postId,
                 HashtagId = hashtag.Id,
@@ -66,7 +66,7 @@ public class HashtagService : IHashtagService
     {
         var since = DateTime.UtcNow.AddHours(-hours);
 
-        var postHashtags = await _uow.PostHashtagRepository.GetListAsync(ph => ph.Post.CreatedAt >= since && ph.Post.IsActive);
+        var postHashtags = await _uow.postHashtagRepository.GetListAsync(ph => ph.Post.CreatedAt >= since && ph.Post.IsActive);
 
         var grouped = postHashtags
             .GroupBy(ph => ph.HashtagId)
@@ -75,7 +75,7 @@ public class HashtagService : IHashtagService
             .ToList();
 
         var hashtagIds = grouped.Select(g => g.Key).ToList();
-        var hashtags = await _uow.HashtagRepository.GetListAsync(h => hashtagIds.Contains(h.Id));
+        var hashtags = await _uow.hashtagRepository.GetListAsync(h => hashtagIds.Contains(h.Id));
         var hashtagNames = hashtags.ToDictionary(h => h.Id, h => h.Name);
 
         var trending = grouped

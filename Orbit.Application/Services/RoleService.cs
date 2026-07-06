@@ -18,18 +18,18 @@ public class RoleService : IRoleService
     public async Task<Result> AssignModeratorAsync(Guid adminProfileId, string targetUsername)
     {
         var slug = targetUsername.ToLowerInvariant();
-        var target = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
         if (target.Id == adminProfileId)
             return Result.Failure("Cannot assign moderator role to yourself");
 
-        var moderatorRole = await _uow.RoleRepository.Get(r => r.Name == "moderator");
+        var moderatorRole = await _uow.roleRepository.Get(r => r.Name == "moderator");
         if (moderatorRole is null)
             return Result.Failure("Moderator role not found");
 
-        var existing = await _uow.UserRoleRepository.Get(ur =>
+        var existing = await _uow.userRoleRepository.Get(ur =>
             ur.ProfileId == target.Id && ur.RoleId == moderatorRole.Id);
         if (existing is not null)
             return Result.Failure(ResponseMessages.UserAlreadyModerator);
@@ -42,27 +42,27 @@ public class RoleService : IRoleService
             AssignedAt = DateTime.UtcNow,
         };
 
-        await _uow.UserRoleRepository.Create(userRole);
+        await _uow.userRoleRepository.Create(userRole);
         return Result.Success(ResponseMessages.RoleAssigned);
     }
 
     public async Task<Result> RemoveModeratorAsync(Guid adminProfileId, string targetUsername)
     {
         var slug = targetUsername.ToLowerInvariant();
-        var target = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
-        var moderatorRole = await _uow.RoleRepository.Get(r => r.Name == "moderator");
+        var moderatorRole = await _uow.roleRepository.Get(r => r.Name == "moderator");
         if (moderatorRole is null)
             return Result.Failure("Moderator role not found");
 
-        var existing = await _uow.UserRoleRepository.Get(ur =>
+        var existing = await _uow.userRoleRepository.Get(ur =>
             ur.ProfileId == target.Id && ur.RoleId == moderatorRole.Id);
         if (existing is null)
             return Result.Failure(ResponseMessages.UserNotModerator);
 
-        await _uow.UserRoleRepository.Delete(existing);
+        await _uow.userRoleRepository.Delete(existing);
         await _uow.SaveChangesAsync();
         return Result.Success(ResponseMessages.RoleRemoved);
     }

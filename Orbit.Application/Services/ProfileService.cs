@@ -24,13 +24,13 @@ public class ProfileService : IProfileService
     public async Task<Result<ProfileResponse>> GetProfileByUsernameAsync(string username, Guid? currentProfileId = null)
     {
         var slug = username.ToLowerInvariant();
-        var profile = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var profile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (profile is null)
             return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
 
         if (currentProfileId.HasValue && currentProfileId.Value != profile.Id)
         {
-            var isBlocked = await _uow.UserBanRepository.Get(b =>
+            var isBlocked = await _uow.userBanRepository.Get(b =>
                 b.BlockerProfileId == profile.Id && b.BlockedProfileId == currentProfileId.Value);
             if (isBlocked is not null)
                 return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
@@ -39,7 +39,7 @@ public class ProfileService : IProfileService
         bool isFollowing = false;
         if (currentProfileId.HasValue && currentProfileId.Value != profile.Id)
         {
-            var follow = await _uow.FollowRepository.Get(f =>
+            var follow = await _uow.followRepository.Get(f =>
                 f.FollowerId == currentProfileId.Value && f.FollowingId == profile.Id);
             isFollowing = follow is not null;
         }
@@ -50,7 +50,7 @@ public class ProfileService : IProfileService
 
     public async Task<Result<ProfileResponse>> UpdateProfileAsync(Guid authUserId, string? displayName, string? bio, bool? isPrivate)
     {
-        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -59,7 +59,7 @@ public class ProfileService : IProfileService
         if (isPrivate.HasValue) profile.IsPrivate = isPrivate.Value;
 
         profile.UpdatedAt = DateTime.UtcNow;
-        await _uow.ProfileRepository.Update(profile);
+        await _uow.profileRepository.Update(profile);
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
@@ -68,7 +68,7 @@ public class ProfileService : IProfileService
 
     public async Task<Result<ProfileResponse>> UpdateProfilePictureAsync(Guid authUserId, Stream fileStream, string fileName)
     {
-        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -87,7 +87,7 @@ public class ProfileService : IProfileService
         profile.ProfilePictureUrl = uploadResult.Data.Url;
         profile.ProfilePicturePublicId = uploadResult.Data.PublicId;
         profile.UpdatedAt = DateTime.UtcNow;
-        await _uow.ProfileRepository.Update(profile);
+        await _uow.profileRepository.Update(profile);
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
@@ -96,7 +96,7 @@ public class ProfileService : IProfileService
 
     public async Task<Result<ProfileResponse>> RemoveProfilePictureAsync(Guid authUserId)
     {
-        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -108,7 +108,7 @@ public class ProfileService : IProfileService
         profile.ProfilePictureUrl = null;
         profile.ProfilePicturePublicId = null;
         profile.UpdatedAt = DateTime.UtcNow;
-        await _uow.ProfileRepository.Update(profile);
+        await _uow.profileRepository.Update(profile);
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
@@ -117,7 +117,7 @@ public class ProfileService : IProfileService
 
     public async Task<Result<ProfileResponse>> UpdateBannerAsync(Guid authUserId, Stream fileStream, string fileName)
     {
-        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -136,7 +136,7 @@ public class ProfileService : IProfileService
         profile.BannerUrl = uploadResult.Data.Url;
         profile.BannerPublicId = uploadResult.Data.PublicId;
         profile.UpdatedAt = DateTime.UtcNow;
-        await _uow.ProfileRepository.Update(profile);
+        await _uow.profileRepository.Update(profile);
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
@@ -145,7 +145,7 @@ public class ProfileService : IProfileService
 
     public async Task<Result<ProfileResponse>> RemoveBannerAsync(Guid authUserId)
     {
-        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -157,7 +157,7 @@ public class ProfileService : IProfileService
         profile.BannerUrl = null;
         profile.BannerPublicId = null;
         profile.UpdatedAt = DateTime.UtcNow;
-        await _uow.ProfileRepository.Update(profile);
+        await _uow.profileRepository.Update(profile);
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
@@ -173,25 +173,25 @@ public class ProfileService : IProfileService
         HashSet<Guid> excludedProfileIds = [];
         if (currentProfileId.HasValue)
         {
-            var blockerProfileIds = (await _uow.UserBanRepository.GetListAsync(b =>
+            var blockerProfileIds = (await _uow.userBanRepository.GetListAsync(b =>
                 b.BlockedProfileId == currentProfileId.Value))
                 .Select(b => b.BlockerProfileId);
 
-            var blockedProfileIds = (await _uow.UserBanRepository.GetListAsync(b =>
+            var blockedProfileIds = (await _uow.userBanRepository.GetListAsync(b =>
                 b.BlockerProfileId == currentProfileId.Value))
                 .Select(b => b.BlockedProfileId);
 
             excludedProfileIds = blockerProfileIds.Concat(blockedProfileIds).ToHashSet();
         }
 
-        var profiles = await _uow.ProfileRepository.GetPagedAsync(
+        var profiles = await _uow.profileRepository.GetPagedAsync(
             p => (p.UsernameSlug.StartsWith(normalized) || p.DisplayName.ToLower().StartsWith(normalized))
                 && !excludedProfileIds.Contains(p.Id),
             p => p.FollowersCount,
             skip,
             pageSize);
 
-        var totalCount = await _uow.ProfileRepository.CountAsync(
+        var totalCount = await _uow.profileRepository.CountAsync(
             p => (p.UsernameSlug.StartsWith(normalized) || p.DisplayName.ToLower().StartsWith(normalized))
                 && !excludedProfileIds.Contains(p.Id));
 
@@ -199,7 +199,7 @@ public class ProfileService : IProfileService
         if (currentProfileId.HasValue)
         {
             var profileIds = profiles.Select(p => p.Id).ToList();
-            var existingFollows = await _uow.FollowRepository.GetListAsync(f =>
+            var existingFollows = await _uow.followRepository.GetListAsync(f =>
                 f.FollowerId == currentProfileId.Value && profileIds.Contains(f.FollowingId));
             followedIds = existingFollows.Select(f => f.FollowingId).ToHashSet();
         }
@@ -224,7 +224,7 @@ public class ProfileService : IProfileService
     public async Task<Result> BanUserAsync(Guid moderatorProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
-        var target = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
@@ -234,10 +234,10 @@ public class ProfileService : IProfileService
         if (target.IsBanned)
             return Result.Failure(ResponseMessages.UserAlreadyBanned);
 
-        var adminRole = await _uow.RoleRepository.Get(r => r.Name == "admin");
+        var adminRole = await _uow.roleRepository.Get(r => r.Name == "admin");
         if (adminRole is not null)
         {
-            var isAdmin = await _uow.UserRoleRepository.Get(ur =>
+            var isAdmin = await _uow.userRoleRepository.Get(ur =>
                 ur.ProfileId == target.Id && ur.RoleId == adminRole.Id);
             if (isAdmin is not null)
                 return Result.Failure(ResponseMessages.CannotBanAdmin);
@@ -246,7 +246,7 @@ public class ProfileService : IProfileService
         target.IsBanned = true;
         target.BannedAt = DateTime.UtcNow;
         target.BannedByProfileId = moderatorProfileId;
-        await _uow.ProfileRepository.Update(target);
+        await _uow.profileRepository.Update(target);
         await _uow.SaveChangesAsync();
 
         return Result.Success(ResponseMessages.BanSuccessful);
@@ -255,7 +255,7 @@ public class ProfileService : IProfileService
     public async Task<Result> UnbanUserAsync(Guid moderatorProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
-        var target = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
@@ -265,7 +265,7 @@ public class ProfileService : IProfileService
         target.IsBanned = false;
         target.BannedAt = null;
         target.BannedByProfileId = null;
-        await _uow.ProfileRepository.Update(target);
+        await _uow.profileRepository.Update(target);
         await _uow.SaveChangesAsync();
 
         return Result.Success(ResponseMessages.UnbanSuccessful);
@@ -274,59 +274,59 @@ public class ProfileService : IProfileService
     public async Task<Result> BlockUserAsync(Guid blockerProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
-        var target = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
         if (target.Id == blockerProfileId)
             return Result.Failure(ResponseMessages.CannotBlockYourself);
 
-        var existingBan = await _uow.UserBanRepository.Get(b =>
+        var existingBan = await _uow.userBanRepository.Get(b =>
             b.BlockerProfileId == blockerProfileId && b.BlockedProfileId == target.Id);
         if (existingBan is not null)
             return Result.Failure(ResponseMessages.AlreadyBlocked);
 
-        var blockedByTarget = await _uow.UserBanRepository.Get(b =>
+        var blockedByTarget = await _uow.userBanRepository.Get(b =>
             b.BlockerProfileId == target.Id && b.BlockedProfileId == blockerProfileId);
         if (blockedByTarget is not null)
             return Result.Failure(ResponseMessages.BlockedByUser);
 
-        var followToTarget = await _uow.FollowRepository.Get(f =>
+        var followToTarget = await _uow.followRepository.Get(f =>
             f.FollowerId == blockerProfileId && f.FollowingId == target.Id);
         if (followToTarget is not null)
         {
-            await _uow.FollowRepository.Delete(followToTarget);
+            await _uow.followRepository.Delete(followToTarget);
             target.FollowersCount = Math.Max(0, target.FollowersCount - 1);
             target.UpdatedAt = DateTime.UtcNow;
-            await _uow.ProfileRepository.Update(target);
+            await _uow.profileRepository.Update(target);
             await _uow.SaveChangesAsync();
 
-            var blockerProfile = await _uow.ProfileRepository.Get(p => p.Id == blockerProfileId);
+            var blockerProfile = await _uow.profileRepository.Get(p => p.Id == blockerProfileId);
             if (blockerProfile is not null)
             {
                 blockerProfile.FollowingCount = Math.Max(0, blockerProfile.FollowingCount - 1);
                 blockerProfile.UpdatedAt = DateTime.UtcNow;
-                await _uow.ProfileRepository.Update(blockerProfile);
+                await _uow.profileRepository.Update(blockerProfile);
                 await _uow.SaveChangesAsync();
             }
         }
 
-        var followFromTarget = await _uow.FollowRepository.Get(f =>
+        var followFromTarget = await _uow.followRepository.Get(f =>
             f.FollowerId == target.Id && f.FollowingId == blockerProfileId);
         if (followFromTarget is not null)
         {
-            await _uow.FollowRepository.Delete(followFromTarget);
+            await _uow.followRepository.Delete(followFromTarget);
             target.FollowingCount = Math.Max(0, target.FollowingCount - 1);
             target.UpdatedAt = DateTime.UtcNow;
-            await _uow.ProfileRepository.Update(target);
+            await _uow.profileRepository.Update(target);
             await _uow.SaveChangesAsync();
 
-            var blockerProfile = await _uow.ProfileRepository.Get(p => p.Id == blockerProfileId);
+            var blockerProfile = await _uow.profileRepository.Get(p => p.Id == blockerProfileId);
             if (blockerProfile is not null)
             {
                 blockerProfile.FollowersCount = Math.Max(0, blockerProfile.FollowersCount - 1);
                 blockerProfile.UpdatedAt = DateTime.UtcNow;
-                await _uow.ProfileRepository.Update(blockerProfile);
+                await _uow.profileRepository.Update(blockerProfile);
                 await _uow.SaveChangesAsync();
             }
         }
@@ -339,35 +339,35 @@ public class ProfileService : IProfileService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _uow.UserBanRepository.Create(ban);
+        await _uow.userBanRepository.Create(ban);
 
-        var blockerPostIds = await _uow.PostRepository.GetListAsync(p => p.ProfileId == blockerProfileId);
+        var blockerPostIds = await _uow.postRepository.GetListAsync(p => p.ProfileId == blockerProfileId);
         var blockerPostIdHashes = blockerPostIds.Select(p => p.Id).ToHashSet();
 
         if (blockerPostIdHashes.Count > 0)
         {
-            var blockedComments = await _uow.CommentRepository.GetListAsync(c =>
+            var blockedComments = await _uow.commentRepository.GetListAsync(c =>
                 c.ProfileId == target.Id && blockerPostIdHashes.Contains(c.PostId));
 
             foreach (var comment in blockedComments)
             {
                 comment.IsActive = false;
-                await _uow.CommentRepository.Update(comment);
+                await _uow.commentRepository.Update(comment);
 
                 var post = blockerPostIds.FirstOrDefault(p => p.Id == comment.PostId);
                 if (post is not null)
                 {
                     post.CommentCount = Math.Max(0, post.CommentCount - 1);
-                    await _uow.PostRepository.Update(post);
+                    await _uow.postRepository.Update(post);
                 }
 
                 if (comment.ParentCommentId.HasValue)
                 {
-                    var parentComment = await _uow.CommentRepository.Get(c => c.Id == comment.ParentCommentId.Value);
+                    var parentComment = await _uow.commentRepository.Get(c => c.Id == comment.ParentCommentId.Value);
                     if (parentComment is not null)
                     {
                         parentComment.ReplyCount = Math.Max(0, parentComment.ReplyCount - 1);
-                        await _uow.CommentRepository.Update(parentComment);
+                        await _uow.commentRepository.Update(parentComment);
                     }
                 }
             }
@@ -382,16 +382,16 @@ public class ProfileService : IProfileService
     public async Task<Result> UnblockUserAsync(Guid blockerProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
-        var target = await _uow.ProfileRepository.Get(p => p.UsernameSlug == slug);
+        var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
-        var ban = await _uow.UserBanRepository.Get(b =>
+        var ban = await _uow.userBanRepository.Get(b =>
             b.BlockerProfileId == blockerProfileId && b.BlockedProfileId == target.Id);
         if (ban is null)
             return Result.Failure(ResponseMessages.NotBlocked);
 
-        await _uow.UserBanRepository.Delete(ban);
+        await _uow.userBanRepository.Delete(ban);
         return Result.Success(ResponseMessages.UnblockSuccessful);
     }
 
@@ -399,17 +399,17 @@ public class ProfileService : IProfileService
         Guid profileId, int page, int pageSize)
     {
         var skip = (page - 1) * pageSize;
-        var bans = await _uow.UserBanRepository.GetPagedAsync(
+        var bans = await _uow.userBanRepository.GetPagedAsync(
             b => b.BlockerProfileId == profileId,
             b => b.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _uow.UserBanRepository.CountAsync(b => b.BlockerProfileId == profileId);
+        var totalCount = await _uow.userBanRepository.CountAsync(b => b.BlockerProfileId == profileId);
 
         var blockedProfileIds = bans.Select(b => b.BlockedProfileId).Distinct().ToList();
         var profiles = blockedProfileIds.Count > 0
-            ? await _uow.ProfileRepository.GetListAsync(p => blockedProfileIds.Contains(p.Id))
+            ? await _uow.profileRepository.GetListAsync(p => blockedProfileIds.Contains(p.Id))
             : [];
         var profileMap = profiles.ToDictionary(p => p.Id);
 
@@ -440,7 +440,7 @@ public class ProfileService : IProfileService
     {
         if (!prefixId.HasValue) return null;
 
-        var prefix = await _uow.UserPrefixRepository.Get(p => p.Id == prefixId.Value);
+        var prefix = await _uow.userPrefixRepository.Get(p => p.Id == prefixId.Value);
         return prefix is null ? null : new UserPrefixResponse(prefix.Id, prefix.Name, prefix.Color, prefix.IconUrl);
     }
 
