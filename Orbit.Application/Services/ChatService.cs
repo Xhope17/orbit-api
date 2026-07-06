@@ -30,9 +30,12 @@ public class ChatService : IChatService
         if (targetProfile.Id == currentProfileId)
             return Result<ChatResponse>.Failure(ResponseMessages.CannotChatYourself);
 
-        var hasMutual = await _chatRepo.HasMutualFollowAsync(currentProfileId, targetProfile.Id);
-        if (!hasMutual)
-            return Result<ChatResponse>.Failure(ResponseMessages.MutualFollowRequired);
+        if (targetProfile.IsPrivate)
+        {
+            var hasMutual = await _chatRepo.HasMutualFollowAsync(currentProfileId, targetProfile.Id);
+            if (!hasMutual)
+                return Result<ChatResponse>.Failure(ResponseMessages.MutualFollowRequired);
+        }
 
         var existing = await _chatRepo.GetExistingDmAsync(currentProfileId, targetProfile.Id);
         if (existing is not null)
