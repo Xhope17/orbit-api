@@ -542,9 +542,6 @@ public class PostService : IPostService
         if (originalPost is null)
             return Result<PostResponse>.Failure(ResponseMessages.PostNotFound);
 
-        if (originalPost.ProfileId == profile.Id)
-            return Result<PostResponse>.Failure(ResponseMessages.CannotRepostYourself);
-
         if (originalPost.IsThread)
             return Result<PostResponse>.Failure(ResponseMessages.CannotRepostThread);
 

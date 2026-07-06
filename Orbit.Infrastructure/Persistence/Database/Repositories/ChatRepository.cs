@@ -4,7 +4,7 @@ using Orbit.Application.Interfaces.Repositories;
 using Orbit.Domain.Entities;
 using Orbit.Domain.DataBase.Context;
 
-namespace Orbit.Infrastructure.Persistence.SqlServer.Repositories;
+namespace Orbit.Infrastructure.Persistence.Database.Repositories;
 
 public class ChatRepository : IChatRepository
 {

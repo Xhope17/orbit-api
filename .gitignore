@@ -11,6 +11,9 @@ obj/
 .env
 PLAN.md
 
+## Properties (auto-generated)
+Orbit.Application/Properties/launchSettings.json
+
 ## IDE
 .vs/
 .vscode/

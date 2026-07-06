@@ -9,7 +9,7 @@ using Orbit.Application.Services;
 using Orbit.Domain.DataBase.Context;
 using Orbit.Application.Interfaces.Repositories;
 using Orbit.Domain.Interfaces.Repositories;
-using Orbit.Infrastructure.Persistence.SqlServer.Repositories;
+using Orbit.Infrastructure.Persistence.Database.Repositories;
 using Orbit.Infrastructure.Services;
 using Orbit.Shared.Constants;
 using Orbit.WebApi.Middlewares;

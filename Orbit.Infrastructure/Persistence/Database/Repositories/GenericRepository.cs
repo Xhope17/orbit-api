@@ -4,7 +4,7 @@ using Orbit.Domain.Interfaces.Repositories;
 using Orbit.Domain.Common;
 using Orbit.Domain.DataBase.Context;
 
-namespace Orbit.Infrastructure.Persistence.SqlServer.Repositories;
+namespace Orbit.Infrastructure.Persistence.Database.Repositories;
 
 public class GenericRepository<T> : IGenericRepository<T> where T : BaseEntity
 {
