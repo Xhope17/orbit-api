@@ -48,7 +48,7 @@ public class ChatService : IChatService
         return Result<ChatResponse>.Success(new ChatResponse(
             Guid.Empty,
             new ChatProfileInfo(targetProfile.Id, targetProfile.Username, targetProfile.DisplayName, targetProfile.ProfilePictureUrl),
-            null, 0, DateTime.UtcNow, false
+            null, 0, DateTime.UtcNow, false, true
         ));
     }
 

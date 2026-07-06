@@ -56,16 +56,19 @@ public class ChatController : BaseController
         if (!result.IsSuccess)
             return BadRequest(new { isSuccess = false, message = result.Message });
 
-        var currentProfileId = profileId.Value;
-        var otherProfileId = result.Data!.OtherParticipant.ProfileId;
+        if (!result.Data!.IsPlaceholder)
+        {
+            var currentProfileId = profileId.Value;
+            var otherProfileId = result.Data!.OtherParticipant.ProfileId;
 
-        await _hubContext.Clients
-            .Group($"profile:{otherProfileId}")
-            .SendAsync("NewConversation", result.Data);
+            await _hubContext.Clients
+                .Group($"profile:{otherProfileId}")
+                .SendAsync("NewConversation", result.Data);
 
-        await _hubContext.Clients
-            .Group($"profile:{currentProfileId}")
-            .SendAsync("NewConversation", result.Data);
+            await _hubContext.Clients
+                .Group($"profile:{currentProfileId}")
+                .SendAsync("NewConversation", result.Data);
+        }
 
         return Ok(new { isSuccess = true, data = result.Data });
     }
