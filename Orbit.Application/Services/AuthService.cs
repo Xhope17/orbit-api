@@ -6,21 +6,15 @@ using Orbit.Application.Constants;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Enums;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.DataBase;
 using Orbit.Domain.Entities;
-using Orbit.Domain.Interfaces.Repositories;
 using Orbit.Shared.Constants;
 
 namespace Orbit.Application.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly IGenericRepository<AuthUser> _authUserRepo;
-    private readonly IGenericRepository<Profile> _profileRepo;
-    private readonly IGenericRepository<UserSession> _sessionRepo;
-    private readonly IGenericRepository<UserPrefix> _prefixRepo;
-    private readonly IGenericRepository<EmailTemplate> _emailTemplateRepo;
-    private readonly IGenericRepository<Role> _roleRepo;
-    private readonly IGenericRepository<UserRole> _userRoleRepo;
+    private readonly IUnitOfWork _uow;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICloudinaryService _cloudinaryService;
     private readonly IJwtService _jwtService;
@@ -30,26 +24,14 @@ public class AuthService : IAuthService
     private const string TokenChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     public AuthService(
-        IGenericRepository<AuthUser> authUserRepo,
-        IGenericRepository<Profile> profileRepo,
-        IGenericRepository<UserSession> sessionRepo,
-        IGenericRepository<UserPrefix> prefixRepo,
-        IGenericRepository<EmailTemplate> emailTemplateRepo,
-        IGenericRepository<Role> roleRepo,
-        IGenericRepository<UserRole> userRoleRepo,
+        IUnitOfWork uow,
         IPasswordHasher passwordHasher,
         ICloudinaryService cloudinaryService,
         IJwtService jwtService,
         IEmailService emailService,
         IResetTokenService resetTokenService)
     {
-        _authUserRepo = authUserRepo;
-        _profileRepo = profileRepo;
-        _sessionRepo = sessionRepo;
-        _prefixRepo = prefixRepo;
-        _emailTemplateRepo = emailTemplateRepo;
-        _roleRepo = roleRepo;
-        _userRoleRepo = userRoleRepo;
+        _uow = uow;
         _passwordHasher = passwordHasher;
         _cloudinaryService = cloudinaryService;
         _jwtService = jwtService;
@@ -77,11 +59,11 @@ public class AuthService : IAuthService
     {
         var usernameSlug = username.ToLowerInvariant();
 
-        var emailExists = await _authUserRepo.FirstOrDefaultAsync(u => u.Email == email);
+        var emailExists = await _uow.AuthUserRepository.Get(u => u.Email == email);
         if (emailExists is not null)
             return Result<RegisterResponse>.Failure(ResponseMessages.EmailAlreadyRegistered);
 
-        var usernameExists = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == usernameSlug);
+        var usernameExists = await _uow.ProfileRepository.Get(p => p.UsernameSlug == usernameSlug);
         if (usernameExists is not null)
             return Result<RegisterResponse>.Failure(ResponseMessages.UsernameAlreadyTaken);
 
@@ -96,7 +78,7 @@ public class AuthService : IAuthService
             UpdatedAt = DateTime.UtcNow,
         };
 
-        await _authUserRepo.CreateAsync(authUser);
+        await _uow.AuthUserRepository.Create(authUser);
 
         string? avatarUrl = null;
 
@@ -126,9 +108,9 @@ public class AuthService : IAuthService
             UpdatedAt = DateTime.UtcNow,
         };
 
-        await _profileRepo.CreateAsync(profile);
+        await _uow.ProfileRepository.Create(profile);
 
-        var userRole = await _roleRepo.FirstOrDefaultAsync(r => r.Name == "user");
+        var userRole = await _uow.RoleRepository.Get(r => r.Name == "user");
         if (userRole is not null)
         {
             var userRoleAssignment = new UserRole
@@ -138,9 +120,10 @@ public class AuthService : IAuthService
                 RoleId = userRole.Id,
                 AssignedAt = DateTime.UtcNow,
             };
-            await _userRoleRepo.AddEntityAsync(userRoleAssignment);
-            await _userRoleRepo.SaveChangesAsync();
+            await _uow.UserRoleRepository.Create(userRoleAssignment);
         }
+
+        await _uow.SaveChangesAsync();
 
         await SendWelcomeEmailAsync(email, displayName, username);
 
@@ -151,13 +134,13 @@ public class AuthService : IAuthService
 
     public async Task<Result<AuthResponse>> LoginAsync(string emailOrUsername, string password)
     {
-        var authUser = await _authUserRepo.FirstOrDefaultAsync(u => u.Email == emailOrUsername);
+        var authUser = await _uow.AuthUserRepository.Get(u => u.Email == emailOrUsername);
 
         if (authUser is null)
         {
-            var profileByUsername = await _profileRepo.FirstOrDefaultAsync(p => p.Username == emailOrUsername);
+            var profileByUsername = await _uow.ProfileRepository.Get(p => p.Username == emailOrUsername);
             if (profileByUsername is not null)
-                authUser = await _authUserRepo.FirstOrDefaultAsync(u => u.Id == profileByUsername.AuthUserId);
+                authUser = await _uow.AuthUserRepository.Get(u => u.Id == profileByUsername.AuthUserId);
         }
 
         if (authUser is null)
@@ -166,7 +149,7 @@ public class AuthService : IAuthService
         if (!_passwordHasher.Verify(password, authUser.PasswordHash))
             return Result<AuthResponse>.Failure(ResponseMessages.InvalidCredentials);
 
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUser.Id);
+        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUser.Id);
         if (profile is null)
             return Result<AuthResponse>.Failure(ResponseMessages.InvalidCredentials);
 
@@ -192,7 +175,8 @@ public class AuthService : IAuthService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _sessionRepo.CreateAsync(session);
+        await _uow.UserSessionRepository.Create(session);
+        await _uow.SaveChangesAsync();
 
         var profileResponse = BuildProfileResponse(profile, prefixResponse);
         var response = new AuthResponse(accessToken, rawRefreshToken, expiresAt, profileResponse, roles);
@@ -202,11 +186,12 @@ public class AuthService : IAuthService
     public async Task<Result> LogoutAsync(string refreshToken)
     {
         var tokenKey = ComputeTokenKey(refreshToken);
-        var session = await _sessionRepo.FirstOrDefaultAsync(s => s.TokenKey == tokenKey);
+        var session = await _uow.UserSessionRepository.Get(s => s.TokenKey == tokenKey);
 
         if (session is not null)
         {
-            await _sessionRepo.DeleteAsync(session.Id);
+            await _uow.UserSessionRepository.Delete(session);
+            await _uow.SaveChangesAsync();
         }
 
         return Result.Success(ResponseMessages.LoggedOutSuccessfully);
@@ -214,7 +199,7 @@ public class AuthService : IAuthService
 
     public async Task<Result<ProfileResponse>> GetCurrentUserAsync(Guid authUserId)
     {
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -235,12 +220,12 @@ public class AuthService : IAuthService
         if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var authUserId))
             return Result<AuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
 
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<AuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
 
         var tokenKey = ComputeTokenKey(refreshToken);
-        var validSession = await _sessionRepo.FirstOrDefaultAsync(s =>
+        var validSession = await _uow.UserSessionRepository.Get(s =>
             s.TokenKey == tokenKey && s.AuthUserId == authUserId);
 
         if (validSession is null)
@@ -249,7 +234,7 @@ public class AuthService : IAuthService
         if (validSession.ExpiresAt < DateTime.UtcNow)
             return Result<AuthResponse>.Failure(ResponseMessages.SessionExpired);
 
-        await _sessionRepo.DeleteAsync(validSession.Id);
+        await _uow.UserSessionRepository.Delete(validSession);
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
 
@@ -270,7 +255,8 @@ public class AuthService : IAuthService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _sessionRepo.CreateAsync(newSession);
+        await _uow.UserSessionRepository.Create(newSession);
+        await _uow.SaveChangesAsync();
 
         var profileResponse = BuildProfileResponse(profile, prefixResponse);
         var response = new AuthResponse(newAccessToken, rawRefreshToken, expiresAt, profileResponse, roles);
@@ -280,18 +266,18 @@ public class AuthService : IAuthService
     public async Task<Result> ForgotPasswordAsync(string emailOrUsername)
     {
         var normalizedInput = emailOrUsername.ToLowerInvariant();
-        var authUser = await _authUserRepo.FirstOrDefaultAsync(u => u.Email == normalizedInput);
+        var authUser = await _uow.AuthUserRepository.Get(u => u.Email == normalizedInput);
 
         if (authUser is null)
         {
-            var profileByUsername = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == normalizedInput);
+            var profileByUsername = await _uow.ProfileRepository.Get(p => p.UsernameSlug == normalizedInput);
             if (profileByUsername is not null)
-                authUser = await _authUserRepo.FirstOrDefaultAsync(u => u.Id == profileByUsername.AuthUserId);
+                authUser = await _uow.AuthUserRepository.Get(u => u.Id == profileByUsername.AuthUserId);
         }
 
         if (authUser is not null)
         {
-            var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUser.Id);
+            var profile = await _uow.ProfileRepository.Get(p => p.AuthUserId == authUser.Id);
             if (profile is null)
                 return Result.Success(ResponseMessages.CheckYourInbox);
 
@@ -304,7 +290,7 @@ public class AuthService : IAuthService
             var frontendUrl = Environment.GetEnvironmentVariable(EnvironmentConstants.FrontendUrl) ?? DefaultsConstants.FrontendUrl;
             var resetUrl = $"{frontendUrl}/reset-password?username={Uri.EscapeDataString(usernameSlug)}&token={Uri.EscapeDataString(token)}";
 
-            var template = await _emailTemplateRepo.FirstOrDefaultAsync(t => t.Name == "password-reset");
+            var template = await _uow.EmailTemplateRepository.Get(t => t.Name == "password-reset");
             if (template is not null)
             {
                 var htmlBody = template.HtmlBody
@@ -330,18 +316,18 @@ public class AuthService : IAuthService
         if (storedToken is null || storedToken != token)
             return Result.Failure(ResponseMessages.InvalidOrExpiredToken);
 
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == usernameSlug);
+        var profile = await _uow.ProfileRepository.Get(p => p.UsernameSlug == usernameSlug);
         if (profile is null)
             return Result.Failure(ResponseMessages.InvalidOrExpiredToken);
 
-        var authUser = await _authUserRepo.FirstOrDefaultAsync(u => u.Id == profile.AuthUserId);
+        var authUser = await _uow.AuthUserRepository.Get(u => u.Id == profile.AuthUserId);
         if (authUser is null)
             return Result.Failure(ResponseMessages.InvalidOrExpiredToken);
 
         authUser.PasswordHash = _passwordHasher.Hash(newPassword);
         authUser.UpdatedAt = DateTime.UtcNow;
-        _authUserRepo.Update(authUser);
-        await _authUserRepo.SaveChangesAsync();
+        await _uow.AuthUserRepository.Update(authUser);
+        await _uow.SaveChangesAsync();
 
         await _resetTokenService.RemoveTokenAsync(usernameSlug);
 
@@ -350,7 +336,7 @@ public class AuthService : IAuthService
 
     private async Task SendWelcomeEmailAsync(string email, string displayName, string username)
     {
-        var template = await _emailTemplateRepo.FirstOrDefaultAsync(t => t.Name == "welcome");
+        var template = await _uow.EmailTemplateRepository.Get(t => t.Name == "welcome");
         if (template is null) return;
 
         var frontendUrl = Environment.GetEnvironmentVariable(EnvironmentConstants.FrontendUrl) ?? DefaultsConstants.FrontendUrl;
@@ -368,11 +354,11 @@ public class AuthService : IAuthService
 
     private async Task<List<string>> GetUserRolesAsync(Guid profileId)
     {
-        var userRoles = await _userRoleRepo.GetListAsync(ur => ur.ProfileId == profileId);
+        var userRoles = await _uow.UserRoleRepository.GetListAsync(ur => ur.ProfileId == profileId);
         if (userRoles.Count == 0) return [];
 
         var roleIds = userRoles.Select(ur => ur.RoleId).ToList();
-        var roles = await _roleRepo.GetListAsync(r => roleIds.Contains(r.Id));
+        var roles = await _uow.RoleRepository.GetListAsync(r => roleIds.Contains(r.Id));
         return roles.Select(r => r.Name).ToList();
     }
 
@@ -386,7 +372,7 @@ public class AuthService : IAuthService
     {
         if (!prefixId.HasValue) return null;
 
-        var prefix = await _prefixRepo.GetByIdAsync(prefixId.Value);
+        var prefix = await _uow.UserPrefixRepository.Get(p => p.Id == prefixId.Value);
         return prefix is null ? null : new UserPrefixResponse(prefix.Id, prefix.Name, prefix.Color, prefix.IconUrl);
     }
 
