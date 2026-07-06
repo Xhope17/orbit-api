@@ -13,4 +13,23 @@ public class UserBanRepository(OrbitDbContext context)
     {
         return await DbSet.Where(predicate).ToListAsync();
     }
+
+    public async Task<int> CountAsync(Expression<Func<UserBan, bool>> predicate)
+    {
+        return await DbSet.CountAsync(predicate);
+    }
+
+    public async Task<List<UserBan>> GetPagedAsync<TKey>(
+        Expression<Func<UserBan, bool>> predicate,
+        Expression<Func<UserBan, TKey>> orderByDescending,
+        int skip,
+        int take)
+    {
+        return await DbSet
+            .Where(predicate)
+            .OrderByDescending(orderByDescending)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+    }
 }

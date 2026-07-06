@@ -13,4 +13,23 @@ public class CommunityRepository(OrbitDbContext context)
     {
         return await DbSet.Where(predicate).ToListAsync();
     }
+
+    public async Task<int> CountAsync(Expression<Func<Community, bool>> predicate)
+    {
+        return await DbSet.CountAsync(predicate);
+    }
+
+    public async Task<List<Community>> GetPagedAsync<TKey>(
+        Expression<Func<Community, bool>> predicate,
+        Expression<Func<Community, TKey>> orderByDescending,
+        int skip,
+        int take)
+    {
+        return await DbSet
+            .Where(predicate)
+            .OrderByDescending(orderByDescending)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+    }
 }
