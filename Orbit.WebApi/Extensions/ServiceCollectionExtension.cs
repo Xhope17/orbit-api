@@ -6,9 +6,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Application.Services;
+using Orbit.Domain.DataBase;
 using Orbit.Domain.DataBase.Context;
 using Orbit.Application.Interfaces.Repositories;
 using Orbit.Domain.Interfaces.Repositories;
+using Orbit.Infrastructure.Persistence.Database;
 using Orbit.Infrastructure.Persistence.Database.Repositories;
 using Orbit.Infrastructure.Services;
 using Orbit.Shared.Constants;
@@ -89,8 +91,30 @@ namespace Orbit.WebApi.Extensions
 
         public static IServiceCollection AddRepositories(this IServiceCollection services)
         {
-            services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
+            services.AddScoped<IAuthUserRepository, AuthUserRepository>();
+            services.AddScoped<IProfileRepository, ProfileRepository>();
+            services.AddScoped<IPostRepository, PostRepository>();
+            services.AddScoped<ICommentRepository, CommentRepository>();
+            services.AddScoped<ICommentLikeRepository, CommentLikeRepository>();
+            services.AddScoped<IPostLikeRepository, PostLikeRepository>();
+            services.AddScoped<IPostMediaRepository, PostMediaRepository>();
+            services.AddScoped<IFollowRepository, FollowRepository>();
+            services.AddScoped<ISavedPostRepository, SavedPostRepository>();
+            services.AddScoped<IUserBanRepository, UserBanRepository>();
+            services.AddScoped<IRoleRepository, RoleRepository>();
+            services.AddScoped<IUserRoleRepository, UserRoleRepository>();
+            services.AddScoped<IUserSessionRepository, UserSessionRepository>();
+            services.AddScoped<IUserPrefixRepository, UserPrefixRepository>();
+            services.AddScoped<IEmailTemplateRepository, EmailTemplateRepository>();
+            services.AddScoped<ICommunityRepository, CommunityRepository>();
+            services.AddScoped<ICommunityMemberRepository, CommunityMemberRepository>();
+            services.AddScoped<ICommunityJoinRequestRepository, CommunityJoinRequestRepository>();
+            services.AddScoped<ICommunityInvitationRepository, CommunityInvitationRepository>();
+            services.AddScoped<IHashtagRepository, HashtagRepository>();
+            services.AddScoped<IPostHashtagRepository, PostHashtagRepository>();
+            services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IChatRepository, ChatRepository>();
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
             return services;
         }
 

@@ -27,8 +27,8 @@ public class ChatHub : Hub
         return profileId;
     }
 
-    private string ProfileGroup(Guid profileId) => $"profile:{profileId}";
-    private string ConversationGroup(Guid conversationId) => $"conversation:{conversationId}";
+    private static string ProfileGroup(Guid profileId) => $"profile:{profileId}";
+    private static string ConversationGroup(Guid conversationId) => $"conversation:{conversationId}";
 
     public override async Task OnConnectedAsync()
     {
@@ -71,64 +71,7 @@ public class ChatHub : Hub
         if (content.Length > DomainConstants.MessageContentMaxLength)
             throw new HubException(ResponseMessages.MessageContentMaxLength);
 
-        if (conversationId == Guid.Empty)
-        {
-            if (targetProfileId is null || targetProfileId.Value == Guid.Empty)
-                throw new HubException("Target profile is required for a new conversation");
-
-            if (targetProfileId.Value == profileId)
-                throw new HubException(ResponseMessages.CannotChatYourself);
-
-            var targetProfile = await _dbContext.Profiles.FindAsync(targetProfileId.Value);
-            if (targetProfile is null)
-                throw new HubException(ResponseMessages.ProfileNotFound);
-
-            if (targetProfile.IsPrivate)
-            {
-                var hasMutual = await _dbContext.Follows
-                    .CountAsync(f =>
-                        (f.FollowerId == profileId && f.FollowingId == targetProfileId) ||
-                        (f.FollowerId == targetProfileId && f.FollowingId == profileId)) == 2;
-                if (!hasMutual)
-                    throw new HubException(ResponseMessages.MutualFollowRequired);
-            }
-
-            var existing = await _dbContext.Conversations
-                .Where(c => c.ConversationType == "dm")
-                .Where(c => c.Participants.Any(p => p.ProfileId == profileId))
-                .Where(c => c.Participants.Any(p => p.ProfileId == targetProfileId))
-                .FirstOrDefaultAsync();
-
-            if (existing is not null)
-                conversationId = existing.Id;
-            else
-            {
-                conversationId = Guid.NewGuid();
-                var conversation = new Conversation
-                {
-                    Id = conversationId,
-                    ConversationType = "dm",
-                    CreatedAt = DateTime.UtcNow,
-                };
-
-                var participants = new List<ConversationParticipant>
-                {
-                    new() { ConversationId = conversationId, ProfileId = profileId, JoinedAt = DateTime.UtcNow },
-                    new() { ConversationId = conversationId, ProfileId = targetProfileId.Value, JoinedAt = DateTime.UtcNow },
-                };
-
-                _dbContext.Conversations.Add(conversation);
-                _dbContext.ConversationParticipants.AddRange(participants);
-            }
-        }
-        else
-        {
-            var isParticipant = await _dbContext.ConversationParticipants
-                .AnyAsync(cp => cp.ConversationId == conversationId && cp.ProfileId == profileId);
-
-            if (!isParticipant)
-                throw new HubException("You are not a participant of this conversation");
-        }
+        var (wasCreated, targetProfile) = await ResolveConversationAsync(conversationId, profileId, targetProfileId);
 
         var message = new Message
         {
@@ -149,22 +92,27 @@ public class ChatHub : Hub
             .Select(p => new { p.Id, p.Username, p.DisplayName, p.ProfilePictureUrl })
             .FirstAsync();
 
-        var messageDto = new ChatMessageBroadcast(
-            message.Id,
-            message.ConversationId,
-            message.Content,
-            message.IsSeen,
-            message.IsEdited,
-            message.EditedAt,
-            message.CreatedAt,
-            message.DeletedAt,
-            new ChatProfileInfo(sender.Id, sender.Username, sender.DisplayName, sender.ProfilePictureUrl)
-        );
+        var messageDto = BuildMessageBroadcast(message, sender);
 
         await Groups.AddToGroupAsync(Context.ConnectionId, ConversationGroup(conversationId));
 
-        await Clients.OthersInGroup(ConversationGroup(conversationId))
-            .SendAsync("ReceiveMessage", messageDto);
+        if (wasCreated)
+        {
+            await NotifyNewConversationAsync(conversationId, profileId, targetProfile!, sender, message, messageDto);
+        }
+
+        var otherParticipantId = wasCreated
+            ? targetProfileId!.Value
+            : await _dbContext.ConversationParticipants
+                .Where(cp => cp.ConversationId == conversationId && cp.ProfileId != profileId)
+                .Select(cp => cp.ProfileId)
+                .FirstOrDefaultAsync();
+
+        if (otherParticipantId != default)
+        {
+            await Clients.Group(ProfileGroup(otherParticipantId))
+                .SendAsync("ReceiveMessage", messageDto);
+        }
 
         await Clients.Caller.SendAsync("ReceiveOwnMessage", messageDto);
     }
@@ -191,8 +139,115 @@ public class ChatHub : Hub
     public async Task Typing(Guid conversationId)
     {
         var profileId = GetProfileId();
-
         await Clients.OthersInGroup(ConversationGroup(conversationId))
             .SendAsync("UserTyping", new { conversationId, profileId });
+    }
+
+    private async Task<(bool wasCreated, Profile? targetProfile)> ResolveConversationAsync(
+        Guid conversationId, Guid profileId, Guid? targetProfileId)
+    {
+        if (conversationId != Guid.Empty)
+        {
+            var isParticipant = await _dbContext.ConversationParticipants
+                .AnyAsync(cp => cp.ConversationId == conversationId && cp.ProfileId == profileId);
+
+            if (!isParticipant)
+                throw new HubException("You are not a participant of this conversation");
+
+            return (false, null);
+        }
+
+        if (targetProfileId is null || targetProfileId.Value == Guid.Empty)
+            throw new HubException("Target profile is required for a new conversation");
+
+        if (targetProfileId.Value == profileId)
+            throw new HubException(ResponseMessages.CannotChatYourself);
+
+        var targetProfile = await _dbContext.Profiles.FindAsync(targetProfileId.Value);
+        if (targetProfile is null)
+            throw new HubException(ResponseMessages.ProfileNotFound);
+
+        if (targetProfile.IsPrivate)
+        {
+            var mutualCount = await _dbContext.Follows
+                .CountAsync(f =>
+                    (f.FollowerId == profileId && f.FollowingId == targetProfileId) ||
+                    (f.FollowerId == targetProfileId && f.FollowingId == profileId));
+            if (mutualCount != 2)
+                throw new HubException(ResponseMessages.MutualFollowRequired);
+        }
+
+        var existing = await _dbContext.Conversations
+            .Where(c => c.ConversationType == "dm")
+            .Where(c => c.Participants.Any(p => p.ProfileId == profileId))
+            .Where(c => c.Participants.Any(p => p.ProfileId == targetProfileId))
+            .FirstOrDefaultAsync();
+
+        if (existing is not null)
+        {
+            return (false, targetProfile);
+        }
+
+        var newId = Guid.NewGuid();
+        var conversation = new Conversation
+        {
+            Id = newId,
+            ConversationType = "dm",
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        var participants = new List<ConversationParticipant>
+        {
+            new() { ConversationId = newId, ProfileId = profileId, JoinedAt = DateTime.UtcNow },
+            new() { ConversationId = newId, ProfileId = targetProfileId.Value, JoinedAt = DateTime.UtcNow },
+        };
+
+        _dbContext.Conversations.Add(conversation);
+        _dbContext.ConversationParticipants.AddRange(participants);
+
+        return (true, targetProfile);
+    }
+
+    private static ChatMessageBroadcast BuildMessageBroadcast(Message message, dynamic sender)
+    {
+        return new ChatMessageBroadcast(
+            message.Id, message.ConversationId, message.Content,
+            message.IsSeen, message.IsEdited, message.EditedAt,
+            message.CreatedAt, message.DeletedAt,
+            new ChatProfileInfo(sender.Id, sender.Username, sender.DisplayName, sender.ProfilePictureUrl)
+        );
+    }
+
+    private async Task NotifyNewConversationAsync(
+        Guid conversationId, Guid profileId, Profile targetProfile,
+        dynamic sender, Message message, ChatMessageBroadcast messageDto)
+    {
+        var lastMsgForOther = new MessageResponse(
+            message.Id, conversationId, profileId, message.Content,
+            message.IsSeen, message.IsEdited, message.EditedAt,
+            message.CreatedAt, message.DeletedAt, false
+        );
+
+        var lastMsgForCaller = new MessageResponse(
+            message.Id, conversationId, profileId, message.Content,
+            message.IsSeen, message.IsEdited, message.EditedAt,
+            message.CreatedAt, message.DeletedAt, true
+        );
+
+        var convForOther = new ChatResponse(
+            conversationId,
+            new ChatProfileInfo(sender.Id, sender.Username, sender.DisplayName, sender.ProfilePictureUrl),
+            lastMsgForOther, 1, DateTime.UtcNow, false
+        );
+
+        var convForCaller = new ChatResponse(
+            conversationId,
+            new ChatProfileInfo(targetProfile.Id, targetProfile.Username, targetProfile.DisplayName, targetProfile.ProfilePictureUrl),
+            lastMsgForCaller, 0, DateTime.UtcNow, false
+        );
+
+        await Clients.Group(ProfileGroup(targetProfile.Id))
+            .SendAsync("NewConversation", convForOther);
+        await Clients.Caller.SendAsync("NewConversation", convForCaller);
     }
 }

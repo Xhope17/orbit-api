@@ -3,55 +3,25 @@ using Orbit.Application.Constants;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Enums;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.DataBase;
 using Orbit.Domain.Entities;
-using Orbit.Domain.Interfaces.Repositories;
 
 namespace Orbit.Application.Services;
 
 public class PostService : IPostService
 {
-    private readonly IGenericRepository<Orbit.Domain.Entities.Post> _postRepo;
-    private readonly IGenericRepository<Profile> _profileRepo;
-    private readonly IGenericRepository<PostLike> _likeRepo;
-    private readonly IGenericRepository<Comment> _commentRepo;
-    private readonly IGenericRepository<PostMedia> _mediaRepo;
-    private readonly IGenericRepository<CommentLike> _commentLikeRepo;
-    private readonly IGenericRepository<Follow> _followRepo;
-    private readonly IGenericRepository<Role> _roleRepo;
-    private readonly IGenericRepository<UserRole> _userRoleRepo;
-    private readonly IGenericRepository<SavedPost> _savedPostRepo;
-    private readonly IGenericRepository<UserBan> _userBanRepo;
+    private readonly IUnitOfWork _uow;
     private readonly ICloudinaryService _cloudinaryService;
     private readonly NotificationChannel _notificationChannel;
     private readonly IHashtagService _hashtagService;
 
     public PostService(
-        IGenericRepository<Orbit.Domain.Entities.Post> postRepo,
-        IGenericRepository<Profile> profileRepo,
-        IGenericRepository<PostLike> likeRepo,
-        IGenericRepository<Comment> commentRepo,
-        IGenericRepository<PostMedia> mediaRepo,
-        IGenericRepository<CommentLike> commentLikeRepo,
-        IGenericRepository<Follow> followRepo,
-        IGenericRepository<Role> roleRepo,
-        IGenericRepository<UserRole> userRoleRepo,
-        IGenericRepository<SavedPost> savedPostRepo,
-        IGenericRepository<UserBan> userBanRepo,
+        IUnitOfWork uow,
         ICloudinaryService cloudinaryService,
         NotificationChannel notificationChannel,
         IHashtagService hashtagService)
     {
-        _postRepo = postRepo;
-        _profileRepo = profileRepo;
-        _likeRepo = likeRepo;
-        _commentRepo = commentRepo;
-        _mediaRepo = mediaRepo;
-        _commentLikeRepo = commentLikeRepo;
-        _followRepo = followRepo;
-        _roleRepo = roleRepo;
-        _userRoleRepo = userRoleRepo;
-        _savedPostRepo = savedPostRepo;
-        _userBanRepo = userBanRepo;
+        _uow = uow;
         _cloudinaryService = cloudinaryService;
         _notificationChannel = notificationChannel;
         _hashtagService = hashtagService;
@@ -59,7 +29,7 @@ public class PostService : IPostService
 
     public async Task<Result<PostResponse>> CreatePostAsync(Guid authUserId, string? content, List<MediaUploadData>? mediaFiles)
     {
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<PostResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -73,7 +43,7 @@ public class PostService : IPostService
             UpdatedAt = DateTime.UtcNow,
         };
 
-        await _postRepo.CreateAsync(post);
+        await _uow.postRepository.Create(post);
 
         var mediaList = new List<PostMedia>();
         if (mediaFiles is not null && mediaFiles.Count > 0)
@@ -104,15 +74,15 @@ public class PostService : IPostService
                         CreatedAt = DateTime.UtcNow,
                     };
                     mediaList.Add(postMedia);
-                    await _mediaRepo.AddEntityAsync(postMedia);
+                    await _uow.postMediaRepository.Create(postMedia);
                 }
             }
         }
 
         profile.PostsCount++;
         profile.UpdatedAt = DateTime.UtcNow;
-        _profileRepo.Update(profile);
-        await _profileRepo.SaveChangesAsync();
+        await _uow.profileRepository.Update(profile);
+        await _uow.SaveChangesAsync();
 
         await _hashtagService.ProcessPostHashtags(post.Id, content);
 
@@ -122,13 +92,13 @@ public class PostService : IPostService
 
     public async Task<Result<PostResponse>> GetPostAsync(Guid postId, Guid? currentProfileId)
     {
-        var post = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId, p => p.Profile);
+        var post = await _uow.postRepository.GetWithProfile(postId);
         if (post?.Profile is null)
             return Result<PostResponse>.Failure(ResponseMessages.PostNotFound);
 
         if (currentProfileId.HasValue && currentProfileId.Value != post.Profile.Id)
         {
-            var isBlocked = await _userBanRepo.FirstOrDefaultAsync(b =>
+            var isBlocked = await _uow.userBanRepository.Get(b =>
                 b.BlockerProfileId == post.Profile.Id && b.BlockedProfileId == currentProfileId.Value);
             if (isBlocked is not null)
                 return Result<PostResponse>.Failure(ResponseMessages.PostNotFound);
@@ -139,31 +109,31 @@ public class PostService : IPostService
         bool isFollowing = false;
         if (currentProfileId.HasValue)
         {
-            var like = await _likeRepo.FirstOrDefaultAsync(l => l.ProfileId == currentProfileId.Value && l.PostId == postId);
+            var like = await _uow.postLikeRepository.Get(l => l.ProfileId == currentProfileId.Value && l.PostId == postId);
             isLiked = like is not null;
 
-            var saved = await _savedPostRepo.FirstOrDefaultAsync(s => s.ProfileId == currentProfileId.Value && s.PostId == postId);
+            var saved = await _uow.savedPostRepository.Get(s => s.ProfileId == currentProfileId.Value && s.PostId == postId);
             isSaved = saved is not null;
 
             if (post.Profile.Id != currentProfileId.Value)
             {
-                var follow = await _followRepo.FirstOrDefaultAsync(f =>
+                var follow = await _uow.followRepository.Get(f =>
                     f.FollowerId == currentProfileId.Value && f.FollowingId == post.Profile.Id);
                 isFollowing = follow is not null;
             }
         }
 
-        var media = await _mediaRepo.GetListAsync(m => m.PostId == postId);
+        var media = await _uow.postMediaRepository.GetListAsync(m => m.PostId == postId);
 
         var author = BuildAuthorResponse(post.Profile, isFollowing);
 
         PostResponse? originalPostResponse = null;
         if (post.OriginalPostId.HasValue)
         {
-            var originalPost = await _postRepo.FirstOrDefaultAsync(p => p.Id == post.OriginalPostId.Value, p => p.Profile);
+            var originalPost = await _uow.postRepository.GetWithProfile(post.OriginalPostId.Value);
             if (originalPost?.Profile is not null)
             {
-                var originalMedia = await _mediaRepo.GetListAsync(m => m.PostId == originalPost.Id);
+                var originalMedia = await _uow.postMediaRepository.GetListAsync(m => m.PostId == originalPost.Id);
                 var originalAuthor = BuildAuthorResponse(originalPost.Profile);
                 originalPostResponse = BuildPostResponse(originalPost, originalAuthor, false, false, originalMedia);
             }
@@ -180,20 +150,20 @@ public class PostService : IPostService
         if (currentProfileId.HasValue)
             blockerProfileIds = await GetBlockerProfileIdsAsync(currentProfileId.Value);
 
-        var posts = await _postRepo.GetPagedAsync(
+        var posts = await _uow.postRepository.GetPagedAsync(
             p => p.CommunityId == null && !blockerProfileIds.Contains(p.ProfileId),
             p => p.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _postRepo.CountAsync(p => p.CommunityId == null && !blockerProfileIds.Contains(p.ProfileId));
+        var totalCount = await _uow.postRepository.CountAsync(p => p.CommunityId == null && !blockerProfileIds.Contains(p.ProfileId));
 
         return await BuildPagedPostResponse(posts, totalCount, page, pageSize, currentProfileId);
     }
 
     public async Task<Result<PagedResult<PostResponse>>> GetFollowingPostsAsync(Guid currentProfileId, int page, int pageSize)
     {
-        var follows = await _followRepo.GetListAsync(f => f.FollowerId == currentProfileId);
+        var follows = await _uow.followRepository.GetListAsync(f => f.FollowerId == currentProfileId);
         var followedProfileIds = follows.Select(f => f.FollowingId).ToHashSet();
 
         if (followedProfileIds.Count == 0)
@@ -223,13 +193,13 @@ public class PostService : IPostService
 
         var skip = (page - 1) * pageSize;
 
-        var posts = await _postRepo.GetPagedAsync(
+        var posts = await _uow.postRepository.GetPagedAsync(
             p => p.CommunityId == null && followedProfileIds.Contains(p.ProfileId),
             p => p.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _postRepo.CountAsync(p =>
+        var totalCount = await _uow.postRepository.CountAsync(p =>
             p.CommunityId == null && followedProfileIds.Contains(p.ProfileId));
 
         return await BuildPagedPostResponse(posts, totalCount, page, pageSize, currentProfileId);
@@ -238,26 +208,26 @@ public class PostService : IPostService
     public async Task<Result<PagedResult<PostResponse>>> GetProfilePostsAsync(string username, Guid? currentProfileId, int page, int pageSize)
     {
         var slug = username.ToLowerInvariant();
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == slug);
+        var profile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (profile is null)
             return Result<PagedResult<PostResponse>>.Failure(ResponseMessages.ProfileNotFound);
 
         if (currentProfileId.HasValue && currentProfileId.Value != profile.Id)
         {
-            var isBlocked = await _userBanRepo.FirstOrDefaultAsync(b =>
+            var isBlocked = await _uow.userBanRepository.Get(b =>
                 b.BlockerProfileId == profile.Id && b.BlockedProfileId == currentProfileId.Value);
             if (isBlocked is not null)
                 return Result<PagedResult<PostResponse>>.Failure(ResponseMessages.PostNotFound);
         }
 
         var skip = (page - 1) * pageSize;
-        var posts = await _postRepo.GetPagedAsync(
+        var posts = await _uow.postRepository.GetPagedAsync(
             p => p.ProfileId == profile.Id && p.CommunityId == null,
             p => p.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _postRepo.CountAsync(p => p.ProfileId == profile.Id && p.CommunityId == null);
+        var totalCount = await _uow.postRepository.CountAsync(p => p.ProfileId == profile.Id && p.CommunityId == null);
 
         return await BuildPagedPostResponse(posts, totalCount, page, pageSize, currentProfileId);
     }
@@ -270,38 +240,38 @@ public class PostService : IPostService
         if (currentProfileId.HasValue)
             blockerProfileIds = await GetBlockerProfileIdsAsync(currentProfileId.Value);
 
-        var posts = await _postRepo.GetPagedAsync(
+        var posts = await _uow.postRepository.GetPagedAsync(
             p => p.Content.Contains(query) && !blockerProfileIds.Contains(p.ProfileId),
             p => p.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _postRepo.CountAsync(p => p.Content.Contains(query) && !blockerProfileIds.Contains(p.ProfileId));
+        var totalCount = await _uow.postRepository.CountAsync(p => p.Content.Contains(query) && !blockerProfileIds.Contains(p.ProfileId));
 
         return await BuildPagedPostResponse(posts, totalCount, page, pageSize, currentProfileId);
     }
 
     public async Task<Result<PostResponse>> UpdatePostAsync(Guid authUserId, Guid postId, string? content, List<MediaUploadData>? mediaFiles = null)
     {
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<PostResponse>.Failure(ResponseMessages.ProfileNotFound);
 
-        var post = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId && p.ProfileId == profile.Id);
+        var post = await _uow.postRepository.Get(p => p.Id == postId && p.ProfileId == profile.Id);
         if (post is null)
             return Result<PostResponse>.Failure(ResponseMessages.PostNotFound);
 
         post.Content = content ?? string.Empty;
         post.UpdatedAt = DateTime.UtcNow;
-        _postRepo.Update(post);
+        await _uow.postRepository.Update(post);
 
         if (mediaFiles is not null)
         {
-            var existingMedia = await _mediaRepo.GetListAsync(m => m.PostId == postId);
+            var existingMedia = await _uow.postMediaRepository.GetListAsync(m => m.PostId == postId);
             foreach (var m in existingMedia)
             {
                 await _cloudinaryService.DeleteAsync(m.PublicId);
-                _mediaRepo.Remove(m);
+                await _uow.postMediaRepository.Delete(m);
             }
 
             for (int i = 0; i < mediaFiles.Count; i++)
@@ -329,16 +299,16 @@ public class PostService : IPostService
                         DurationSeconds = data.DurationSeconds,
                         CreatedAt = DateTime.UtcNow,
                     };
-                    await _mediaRepo.AddEntityAsync(postMedia);
+                    await _uow.postMediaRepository.Create(postMedia);
                 }
             }
         }
 
-        await _postRepo.SaveChangesAsync();
+        await _uow.SaveChangesAsync();
 
         await _hashtagService.ProcessPostHashtags(postId, content);
 
-        var mediaList = await _mediaRepo.GetListAsync(m => m.PostId == postId);
+        var mediaList = await _uow.postMediaRepository.GetListAsync(m => m.PostId == postId);
 
         var author = BuildAuthorResponse(profile);
         return Result<PostResponse>.Success(BuildPostResponse(post, author, false, false, mediaList));
@@ -346,65 +316,66 @@ public class PostService : IPostService
 
     public async Task<Result> DeletePostAsync(Guid authUserId, Guid postId)
     {
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
         var isModeratorOrAdmin = false;
-        var moderatorRole = await _roleRepo.FirstOrDefaultAsync(r => r.Name == "moderator");
-        var adminRole = await _roleRepo.FirstOrDefaultAsync(r => r.Name == "admin");
+        var moderatorRole = await _uow.roleRepository.Get(r => r.Name == "moderator");
+        var adminRole = await _uow.roleRepository.Get(r => r.Name == "admin");
 
         if (moderatorRole is not null)
         {
-            var hasModerator = await _userRoleRepo.FirstOrDefaultAsync(ur =>
+            var hasModerator = await _uow.userRoleRepository.Get(ur =>
                 ur.ProfileId == profile.Id && ur.RoleId == moderatorRole.Id);
             if (hasModerator is not null) isModeratorOrAdmin = true;
         }
         if (!isModeratorOrAdmin && adminRole is not null)
         {
-            var hasAdmin = await _userRoleRepo.FirstOrDefaultAsync(ur =>
+            var hasAdmin = await _uow.userRoleRepository.Get(ur =>
                 ur.ProfileId == profile.Id && ur.RoleId == adminRole.Id);
             if (hasAdmin is not null) isModeratorOrAdmin = true;
         }
 
         var post = isModeratorOrAdmin
-            ? await _postRepo.FirstOrDefaultAsync(p => p.Id == postId)
-            : await _postRepo.FirstOrDefaultAsync(p => p.Id == postId && p.ProfileId == profile.Id);
+            ? await _uow.postRepository.Get(p => p.Id == postId)
+            : await _uow.postRepository.Get(p => p.Id == postId && p.ProfileId == profile.Id);
 
         if (post is null)
             return Result.Failure(ResponseMessages.PostNotFound);
 
-        var mediaList = await _mediaRepo.GetListAsync(m => m.PostId == postId);
+        var mediaList = await _uow.postMediaRepository.GetListAsync(m => m.PostId == postId);
         foreach (var media in mediaList)
         {
             await _cloudinaryService.DeleteAsync(media.PublicId);
-            _mediaRepo.Remove(media);
+            await _uow.postMediaRepository.Delete(media);
         }
 
-        await _postRepo.DeleteAsync(postId);
+        await _uow.postRepository.Delete(post);
+        await _uow.SaveChangesAsync();
 
         var ownerProfile = isModeratorOrAdmin
-            ? await _profileRepo.GetByIdAsync(post.ProfileId)
+            ? await _uow.profileRepository.Get(p => p.Id == post.ProfileId)
             : profile;
 
         if (ownerProfile is not null)
         {
             ownerProfile.PostsCount = Math.Max(0, ownerProfile.PostsCount - 1);
             ownerProfile.UpdatedAt = DateTime.UtcNow;
-            _profileRepo.Update(ownerProfile);
+            await _uow.profileRepository.Update(ownerProfile);
         }
-        await _profileRepo.SaveChangesAsync();
+        await _uow.SaveChangesAsync();
 
         return Result.Success(ResponseMessages.PostDeleted);
     }
 
     public async Task<Result<LikeResponse>> LikePostAsync(Guid profileId, Guid postId)
     {
-        var post = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId);
+        var post = await _uow.postRepository.Get(p => p.Id == postId);
         if (post is null)
             return Result<LikeResponse>.Failure(ResponseMessages.PostNotFound);
 
-        var existingLike = await _likeRepo.FirstOrDefaultAsync(l => l.ProfileId == profileId && l.PostId == postId);
+        var existingLike = await _uow.postLikeRepository.Get(l => l.ProfileId == profileId && l.PostId == postId);
         if (existingLike is not null)
             return Result<LikeResponse>.Success(new LikeResponse(postId, true, post.LikeCount));
 
@@ -415,12 +386,12 @@ public class PostService : IPostService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _likeRepo.CreateAsync(like);
+        await _uow.postLikeRepository.Create(like);
 
         post.LikeCount++;
         post.UpdatedAt = DateTime.UtcNow;
-        _postRepo.Update(post);
-        await _postRepo.SaveChangesAsync();
+        await _uow.postRepository.Update(post);
+        await _uow.SaveChangesAsync();
 
         if (post.ProfileId != profileId)
         {
@@ -433,31 +404,32 @@ public class PostService : IPostService
 
     public async Task<Result<LikeResponse>> UnlikePostAsync(Guid profileId, Guid postId)
     {
-        var post = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId);
+        var post = await _uow.postRepository.Get(p => p.Id == postId);
         if (post is null)
             return Result<LikeResponse>.Failure(ResponseMessages.PostNotFound);
 
-        var like = await _likeRepo.FirstOrDefaultAsync(l => l.ProfileId == profileId && l.PostId == postId);
+        var like = await _uow.postLikeRepository.Get(l => l.ProfileId == profileId && l.PostId == postId);
         if (like is null)
             return Result<LikeResponse>.Success(new LikeResponse(postId, false, post.LikeCount));
 
-        await _likeRepo.DeleteAsync(like.Id);
+        await _uow.postLikeRepository.Delete(like);
+        await _uow.SaveChangesAsync();
 
         post.LikeCount = Math.Max(0, post.LikeCount - 1);
         post.UpdatedAt = DateTime.UtcNow;
-        _postRepo.Update(post);
-        await _postRepo.SaveChangesAsync();
+        await _uow.postRepository.Update(post);
+        await _uow.SaveChangesAsync();
 
         return Result<LikeResponse>.Success(new LikeResponse(postId, false, post.LikeCount));
     }
 
     public async Task<Result<SaveResponse>> SavePostAsync(Guid profileId, Guid postId)
     {
-        var post = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId);
+        var post = await _uow.postRepository.Get(p => p.Id == postId);
         if (post is null)
             return Result<SaveResponse>.Failure(ResponseMessages.PostNotFound);
 
-        var existing = await _savedPostRepo.FirstOrDefaultAsync(s => s.ProfileId == profileId && s.PostId == postId);
+        var existing = await _uow.savedPostRepository.Get(s => s.ProfileId == profileId && s.PostId == postId);
         if (existing is not null)
             return Result<SaveResponse>.Success(new SaveResponse(postId, true));
 
@@ -469,32 +441,34 @@ public class PostService : IPostService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _savedPostRepo.CreateAsync(savedPost);
+        await _uow.savedPostRepository.Create(savedPost);
+        await _uow.SaveChangesAsync();
 
         post.SaveCount++;
         post.UpdatedAt = DateTime.UtcNow;
-        _postRepo.Update(post);
-        await _postRepo.SaveChangesAsync();
+        await _uow.postRepository.Update(post);
+        await _uow.SaveChangesAsync();
 
         return Result<SaveResponse>.Success(new SaveResponse(postId, true));
     }
 
     public async Task<Result<SaveResponse>> UnsavePostAsync(Guid profileId, Guid postId)
     {
-        var post = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId);
+        var post = await _uow.postRepository.Get(p => p.Id == postId);
         if (post is null)
             return Result<SaveResponse>.Failure(ResponseMessages.PostNotFound);
 
-        var savedPost = await _savedPostRepo.FirstOrDefaultAsync(s => s.ProfileId == profileId && s.PostId == postId);
+        var savedPost = await _uow.savedPostRepository.Get(s => s.ProfileId == profileId && s.PostId == postId);
         if (savedPost is null)
             return Result<SaveResponse>.Success(new SaveResponse(postId, false));
 
-        await _savedPostRepo.DeleteAsync(savedPost.Id);
+        await _uow.savedPostRepository.Delete(savedPost);
+        await _uow.SaveChangesAsync();
 
         post.SaveCount = Math.Max(0, post.SaveCount - 1);
         post.UpdatedAt = DateTime.UtcNow;
-        _postRepo.Update(post);
-        await _postRepo.SaveChangesAsync();
+        await _uow.postRepository.Update(post);
+        await _uow.SaveChangesAsync();
 
         return Result<SaveResponse>.Success(new SaveResponse(postId, false));
     }
@@ -502,13 +476,13 @@ public class PostService : IPostService
     public async Task<Result<PagedResult<PostResponse>>> GetSavedPostsAsync(Guid profileId, int page, int pageSize)
     {
         var skip = (page - 1) * pageSize;
-        var savedPosts = await _savedPostRepo.GetPagedAsync(
+        var savedPosts = await _uow.savedPostRepository.GetPagedAsync(
             s => s.ProfileId == profileId,
             s => s.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _savedPostRepo.CountAsync(s => s.ProfileId == profileId);
+        var totalCount = await _uow.savedPostRepository.CountAsync(s => s.ProfileId == profileId);
 
         if (savedPosts.Count == 0)
             return Result<PagedResult<PostResponse>>.Success(new PagedResult<PostResponse>
@@ -520,7 +494,7 @@ public class PostService : IPostService
             });
 
         var postIds = savedPosts.Select(s => s.PostId).ToList();
-        var posts = await _postRepo.GetListAsync(p => postIds.Contains(p.Id));
+        var posts = await _uow.postRepository.GetListAsync(p => postIds.Contains(p.Id));
 
         var postMap = posts.ToDictionary(p => p.Id);
         var orderedPosts = savedPosts
@@ -534,18 +508,18 @@ public class PostService : IPostService
 
     public async Task<Result<PostResponse>> RepostPostAsync(Guid authUserId, Guid postId)
     {
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<PostResponse>.Failure(ResponseMessages.ProfileNotFound);
 
-        var originalPost = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId, p => p.Profile);
+        var originalPost = await _uow.postRepository.GetWithProfile(postId);
         if (originalPost is null)
             return Result<PostResponse>.Failure(ResponseMessages.PostNotFound);
 
         if (originalPost.IsThread)
             return Result<PostResponse>.Failure(ResponseMessages.CannotRepostThread);
 
-        var existingRepost = await _postRepo.FirstOrDefaultAsync(p =>
+        var existingRepost = await _uow.postRepository.Get(p =>
             p.ProfileId == profile.Id && p.OriginalPostId == postId && p.IsRepost);
         if (existingRepost is not null)
             return Result<PostResponse>.Failure(ResponseMessages.AlreadyReposted);
@@ -562,14 +536,14 @@ public class PostService : IPostService
             UpdatedAt = DateTime.UtcNow,
         };
 
-        await _postRepo.CreateAsync(repost);
+        await _uow.postRepository.Create(repost);
 
         profile.PostsCount++;
         profile.UpdatedAt = DateTime.UtcNow;
-        _profileRepo.Update(profile);
-        await _profileRepo.SaveChangesAsync();
+        await _uow.profileRepository.Update(profile);
+        await _uow.SaveChangesAsync();
 
-        var originalMedia = await _mediaRepo.GetListAsync(m => m.PostId == originalPost.Id);
+        var originalMedia = await _uow.postMediaRepository.GetListAsync(m => m.PostId == originalPost.Id);
         var originalAuthor = BuildAuthorResponse(originalPost.Profile);
         var originalPostResponse = BuildPostResponse(originalPost, originalAuthor, false, false, originalMedia);
 
@@ -585,11 +559,11 @@ public class PostService : IPostService
 
     public async Task<Result<PostResponse>> ThreadPostAsync(Guid authUserId, Guid postId, string content)
     {
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result<PostResponse>.Failure(ResponseMessages.ProfileNotFound);
 
-        var parentPost = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId, p => p.Profile);
+        var parentPost = await _uow.postRepository.GetWithProfile(postId);
         if (parentPost is null)
             return Result<PostResponse>.Failure(ResponseMessages.PostNotFound);
 
@@ -605,14 +579,14 @@ public class PostService : IPostService
             UpdatedAt = DateTime.UtcNow,
         };
 
-        await _postRepo.CreateAsync(thread);
+        await _uow.postRepository.Create(thread);
 
         profile.PostsCount++;
         profile.UpdatedAt = DateTime.UtcNow;
-        _profileRepo.Update(profile);
-        await _profileRepo.SaveChangesAsync();
+        await _uow.profileRepository.Update(profile);
+        await _uow.SaveChangesAsync();
 
-        var parentMedia = await _mediaRepo.GetListAsync(m => m.PostId == parentPost.Id);
+        var parentMedia = await _uow.postMediaRepository.GetListAsync(m => m.PostId == parentPost.Id);
         var parentAuthor = BuildAuthorResponse(parentPost.Profile);
         var parentPostResponse = BuildPostResponse(parentPost, parentAuthor, false, false, parentMedia);
 
@@ -628,13 +602,13 @@ public class PostService : IPostService
 
     public async Task<Result<CommentResponse>> CreateCommentAsync(Guid profileId, Guid postId, string content, Guid? parentCommentId = null)
     {
-        var post = await _postRepo.FirstOrDefaultAsync(p => p.Id == postId);
+        var post = await _uow.postRepository.Get(p => p.Id == postId);
         if (post is null)
             return Result<CommentResponse>.Failure(ResponseMessages.PostNotFound);
 
         if (post.ProfileId != profileId)
         {
-            var isBlocked = await _userBanRepo.FirstOrDefaultAsync(b =>
+            var isBlocked = await _uow.userBanRepository.Get(b =>
                 b.BlockerProfileId == post.ProfileId && b.BlockedProfileId == profileId);
             if (isBlocked is not null)
                 return Result<CommentResponse>.Failure(ResponseMessages.NotAuthorized);
@@ -643,7 +617,7 @@ public class PostService : IPostService
         Comment? parentComment = null;
         if (parentCommentId.HasValue)
         {
-            parentComment = await _commentRepo.GetByIdAsync(parentCommentId.Value);
+            parentComment = await _uow.commentRepository.Get(c => c.Id == parentCommentId.Value);
             if (parentComment is null)
                 return Result<CommentResponse>.Failure(ResponseMessages.ParentCommentNotFound);
 
@@ -663,21 +637,21 @@ public class PostService : IPostService
             UpdatedAt = DateTime.UtcNow,
         };
 
-        await _commentRepo.CreateAsync(comment);
+        await _uow.commentRepository.Create(comment);
 
         post.CommentCount++;
         post.UpdatedAt = DateTime.UtcNow;
-        _postRepo.Update(post);
-        await _postRepo.SaveChangesAsync();
+        await _uow.postRepository.Update(post);
+        await _uow.SaveChangesAsync();
 
         if (parentComment is not null)
         {
             parentComment.ReplyCount++;
-            _commentRepo.Update(parentComment);
-            await _commentRepo.SaveChangesAsync();
+            await _uow.commentRepository.Update(parentComment);
+            await _uow.SaveChangesAsync();
         }
 
-        var profile = await _profileRepo.GetByIdAsync(profileId);
+        var profile = await _uow.profileRepository.Get(p => p.Id == profileId);
 
         if (post.ProfileId != profileId)
         {
@@ -693,13 +667,13 @@ public class PostService : IPostService
     public async Task<Result<PagedResult<CommentResponse>>> GetCommentsAsync(Guid postId, Guid? currentProfileId, int page, int pageSize)
     {
         var skip = (page - 1) * pageSize;
-        var comments = await _commentRepo.GetPagedAsync(
+        var comments = await _uow.commentRepository.GetPagedAsync(
             c => c.PostId == postId && c.ParentCommentId == null,
             c => c.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _commentRepo.CountAsync(c => c.PostId == postId && c.ParentCommentId == null);
+        var totalCount = await _uow.commentRepository.CountAsync(c => c.PostId == postId && c.ParentCommentId == null);
 
         var profileIds = comments.Select(c => c.ProfileId).Distinct().ToList();
         var profileMap = await BatchLoadProfilesAsync(profileIds);
@@ -709,7 +683,7 @@ public class PostService : IPostService
         HashSet<Guid> followedProfileIds = [];
         if (currentProfileId.HasValue && profileIds.Count > 0)
         {
-            var follows = await _followRepo.GetListAsync(f =>
+            var follows = await _uow.followRepository.GetListAsync(f =>
                 f.FollowerId == currentProfileId.Value && profileIds.Contains(f.FollowingId));
             followedProfileIds = follows.Select(f => f.FollowingId).ToHashSet();
         }
@@ -733,18 +707,18 @@ public class PostService : IPostService
 
     public async Task<Result<PagedResult<CommentResponse>>> GetCommentRepliesAsync(Guid commentId, Guid? currentProfileId, int page, int pageSize)
     {
-        var parentComment = await _commentRepo.GetByIdAsync(commentId);
+        var parentComment = await _uow.commentRepository.Get(c => c.Id == commentId);
         if (parentComment is null)
             return Result<PagedResult<CommentResponse>>.Failure(ResponseMessages.ParentCommentNotFound);
 
         var skip = (page - 1) * pageSize;
-        var replies = await _commentRepo.GetPagedAsync(
+        var replies = await _uow.commentRepository.GetPagedAsync(
             c => c.ParentCommentId == commentId,
             c => c.CreatedAt,
             skip,
             pageSize);
 
-        var totalCount = await _commentRepo.CountAsync(c => c.ParentCommentId == commentId);
+        var totalCount = await _uow.commentRepository.CountAsync(c => c.ParentCommentId == commentId);
 
         var profileIds = replies.Select(c => c.ProfileId).Distinct().ToList();
         var profileMap = await BatchLoadProfilesAsync(profileIds);
@@ -754,7 +728,7 @@ public class PostService : IPostService
         HashSet<Guid> followedProfileIds = [];
         if (currentProfileId.HasValue && profileIds.Count > 0)
         {
-            var follows = await _followRepo.GetListAsync(f =>
+            var follows = await _uow.followRepository.GetListAsync(f =>
                 f.FollowerId == currentProfileId.Value && profileIds.Contains(f.FollowingId));
             followedProfileIds = follows.Select(f => f.FollowingId).ToHashSet();
         }
@@ -778,42 +752,43 @@ public class PostService : IPostService
 
     public async Task<Result> DeleteCommentAsync(Guid authUserId, Guid commentId)
     {
-        var profile = await _profileRepo.FirstOrDefaultAsync(p => p.AuthUserId == authUserId);
+        var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
             return Result.Failure(ResponseMessages.ProfileNotFound);
 
-        var comment = await _commentRepo.GetByIdAsync(commentId);
+        var comment = await _uow.commentRepository.Get(c => c.Id == commentId);
         if (comment is null)
             return Result.Failure(ResponseMessages.CommentNotFound);
 
         if (comment.ProfileId != profile.Id)
         {
-            var post = await _postRepo.GetByIdAsync(comment.PostId);
+            var post = await _uow.postRepository.Get(p => p.Id == comment.PostId);
             if (post is null || post.ProfileId != profile.Id)
                 return Result.Failure(ResponseMessages.NotAuthorized);
         }
 
         var parentCommentId = comment.ParentCommentId;
 
-        await _commentRepo.DeleteAsync(commentId);
+        await _uow.commentRepository.Delete(comment);
+        await _uow.SaveChangesAsync();
 
-        var postEntity = await _postRepo.GetByIdAsync(comment.PostId);
+        var postEntity = await _uow.postRepository.Get(p => p.Id == comment.PostId);
         if (postEntity is not null)
         {
             postEntity.CommentCount = Math.Max(0, postEntity.CommentCount - 1);
             postEntity.UpdatedAt = DateTime.UtcNow;
-            _postRepo.Update(postEntity);
-            await _postRepo.SaveChangesAsync();
+            await _uow.postRepository.Update(postEntity);
+            await _uow.SaveChangesAsync();
         }
 
         if (parentCommentId.HasValue)
         {
-            var parentComment = await _commentRepo.GetByIdAsync(parentCommentId.Value);
+            var parentComment = await _uow.commentRepository.Get(c => c.Id == parentCommentId.Value);
             if (parentComment is not null)
             {
                 parentComment.ReplyCount = Math.Max(0, parentComment.ReplyCount - 1);
-                _commentRepo.Update(parentComment);
-                await _commentRepo.SaveChangesAsync();
+                await _uow.commentRepository.Update(parentComment);
+                await _uow.SaveChangesAsync();
             }
         }
 
@@ -822,11 +797,11 @@ public class PostService : IPostService
 
     public async Task<Result<CommentLikeResponse>> LikeCommentAsync(Guid profileId, Guid commentId)
     {
-        var comment = await _commentRepo.FirstOrDefaultAsync(c => c.Id == commentId);
+        var comment = await _uow.commentRepository.Get(c => c.Id == commentId);
         if (comment is null)
             return Result<CommentLikeResponse>.Failure(ResponseMessages.CommentNotFound);
 
-        var existingLike = await _commentLikeRepo.FirstOrDefaultAsync(cl => cl.ProfileId == profileId && cl.CommentId == commentId);
+        var existingLike = await _uow.commentLikeRepository.Get(cl => cl.ProfileId == profileId && cl.CommentId == commentId);
         if (existingLike is not null)
             return Result<CommentLikeResponse>.Success(new CommentLikeResponse(commentId, true, comment.LikeCount));
 
@@ -837,37 +812,38 @@ public class PostService : IPostService
             CreatedAt = DateTime.UtcNow,
         };
 
-        await _commentLikeRepo.CreateAsync(like);
+        await _uow.commentLikeRepository.Create(like);
 
         comment.LikeCount++;
-        _commentRepo.Update(comment);
-        await _commentRepo.SaveChangesAsync();
+        await _uow.commentRepository.Update(comment);
+        await _uow.SaveChangesAsync();
 
         return Result<CommentLikeResponse>.Success(new CommentLikeResponse(commentId, true, comment.LikeCount));
     }
 
     public async Task<Result<CommentLikeResponse>> UnlikeCommentAsync(Guid profileId, Guid commentId)
     {
-        var comment = await _commentRepo.FirstOrDefaultAsync(c => c.Id == commentId);
+        var comment = await _uow.commentRepository.Get(c => c.Id == commentId);
         if (comment is null)
             return Result<CommentLikeResponse>.Failure(ResponseMessages.CommentNotFound);
 
-        var like = await _commentLikeRepo.FirstOrDefaultAsync(cl => cl.ProfileId == profileId && cl.CommentId == commentId);
+        var like = await _uow.commentLikeRepository.Get(cl => cl.ProfileId == profileId && cl.CommentId == commentId);
         if (like is null)
             return Result<CommentLikeResponse>.Success(new CommentLikeResponse(commentId, false, comment.LikeCount));
 
-        await _commentLikeRepo.DeleteAsync(like.Id);
+        await _uow.commentLikeRepository.Delete(like);
+        await _uow.SaveChangesAsync();
 
         comment.LikeCount = Math.Max(0, comment.LikeCount - 1);
-        _commentRepo.Update(comment);
-        await _commentRepo.SaveChangesAsync();
+        await _uow.commentRepository.Update(comment);
+        await _uow.SaveChangesAsync();
 
         return Result<CommentLikeResponse>.Success(new CommentLikeResponse(commentId, false, comment.LikeCount));
     }
 
     private async Task<HashSet<Guid>> GetBlockerProfileIdsAsync(Guid profileId)
     {
-        var bans = await _userBanRepo.GetListAsync(b => b.BlockedProfileId == profileId);
+        var bans = await _uow.userBanRepository.GetListAsync(b => b.BlockedProfileId == profileId);
         return bans.Select(b => b.BlockerProfileId).ToHashSet();
     }
 
@@ -877,7 +853,7 @@ public class PostService : IPostService
             return [];
 
         var commentIds = comments.Select(c => c.Id).ToList();
-        var likes = await _commentLikeRepo.GetListAsync(cl =>
+        var likes = await _uow.commentLikeRepository.GetListAsync(cl =>
             cl.ProfileId == currentProfileId.Value && commentIds.Contains(cl.CommentId));
         return likes.Select(l => l.CommentId).ToHashSet();
     }
@@ -894,15 +870,15 @@ public class PostService : IPostService
         if (currentProfileId.HasValue && posts.Count > 0)
         {
             var postIds = posts.Select(p => p.Id).ToList();
-            var likes = await _likeRepo.GetListAsync(l =>
+            var likes = await _uow.postLikeRepository.GetListAsync(l =>
                 l.ProfileId == currentProfileId.Value && postIds.Contains(l.PostId));
             likedPostIds = likes.Select(l => l.PostId).ToHashSet();
 
-            var saved = await _savedPostRepo.GetListAsync(s =>
+            var saved = await _uow.savedPostRepository.GetListAsync(s =>
                 s.ProfileId == currentProfileId.Value && postIds.Contains(s.PostId));
             savedPostIds = saved.Select(s => s.PostId).ToHashSet();
 
-            var follows = await _followRepo.GetListAsync(f =>
+            var follows = await _uow.followRepository.GetListAsync(f =>
                 f.FollowerId == currentProfileId.Value && profileIds.Contains(f.FollowingId));
             followedProfileIds = follows.Select(f => f.FollowingId).ToHashSet();
         }
@@ -911,7 +887,7 @@ public class PostService : IPostService
         if (posts.Count > 0)
         {
             var postIds = posts.Select(p => p.Id).ToList();
-            var allMedia = await _mediaRepo.GetListAsync(m => postIds.Contains(m.PostId));
+            var allMedia = await _uow.postMediaRepository.GetListAsync(m => postIds.Contains(m.PostId));
             mediaMap = allMedia.GroupBy(m => m.PostId).ToDictionary(g => g.Key, g => g.ToList());
         }
 
@@ -924,7 +900,7 @@ public class PostService : IPostService
 
         if (originalPostIds.Count > 0)
         {
-            var originalPosts = await _postRepo.GetListAsync(p => originalPostIds.Contains(p.Id));
+            var originalPosts = await _uow.postRepository.GetListAsync(p => originalPostIds.Contains(p.Id));
             var originalProfileIds = originalPosts.Select(p => p.ProfileId).Distinct().ToList();
             var originalProfileMap = await BatchLoadProfilesAsync(originalProfileIds);
 
@@ -932,7 +908,7 @@ public class PostService : IPostService
             if (originalPosts.Count > 0)
             {
                 var origPostIds = originalPosts.Select(p => p.Id).ToList();
-                var allOrigMedia = await _mediaRepo.GetListAsync(m => origPostIds.Contains(m.PostId));
+                var allOrigMedia = await _uow.postMediaRepository.GetListAsync(m => origPostIds.Contains(m.PostId));
                 originalMediaMap = allOrigMedia.GroupBy(m => m.PostId).ToDictionary(g => g.Key, g => g.ToList());
             }
 
@@ -973,7 +949,7 @@ public class PostService : IPostService
     private async Task<Dictionary<Guid, Profile>> BatchLoadProfilesAsync(List<Guid> profileIds)
     {
         if (profileIds.Count == 0) return [];
-        var profiles = await _profileRepo.GetListAsync(p => profileIds.Contains(p.Id));
+        var profiles = await _uow.profileRepository.GetListAsync(p => profileIds.Contains(p.Id));
         return profiles.ToDictionary(p => p.Id);
     }
 

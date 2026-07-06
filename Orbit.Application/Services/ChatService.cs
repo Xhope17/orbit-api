@@ -4,7 +4,7 @@ using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.Entities;
 using Orbit.Application.Interfaces.Repositories;
-using Orbit.Domain.Interfaces.Repositories;
+using Orbit.Domain.DataBase;
 using Orbit.Shared.Constants;
 
 namespace Orbit.Application.Services;
@@ -12,18 +12,18 @@ namespace Orbit.Application.Services;
 public class ChatService : IChatService
 {
     private readonly IChatRepository _chatRepo;
-    private readonly IGenericRepository<Profile> _profileRepo;
+    private readonly IUnitOfWork _uow;
 
-    public ChatService(IChatRepository chatRepo, IGenericRepository<Profile> profileRepo)
+    public ChatService(IChatRepository chatRepo, IUnitOfWork uow)
     {
         _chatRepo = chatRepo;
-        _profileRepo = profileRepo;
+        _uow = uow;
     }
 
     public async Task<Result<ChatResponse>> CreateConversationAsync(Guid currentProfileId, string targetUsername)
     {
         var slug = targetUsername.ToLowerInvariant();
-        var targetProfile = await _profileRepo.FirstOrDefaultAsync(p => p.UsernameSlug == slug);
+        var targetProfile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (targetProfile is null)
             return Result<ChatResponse>.Failure(ResponseMessages.ProfileNotFound);
 
@@ -48,7 +48,7 @@ public class ChatService : IChatService
         return Result<ChatResponse>.Success(new ChatResponse(
             Guid.Empty,
             new ChatProfileInfo(targetProfile.Id, targetProfile.Username, targetProfile.DisplayName, targetProfile.ProfilePictureUrl),
-            null, 0, DateTime.UtcNow, false
+            null, 0, DateTime.UtcNow, false, true
         ));
     }
 
@@ -146,7 +146,7 @@ public class ChatService : IChatService
 
     public async Task<ChatProfileInfo?> GetProfileInfoAsync(Guid profileId)
     {
-        var profile = await _profileRepo.GetByIdAsync(profileId);
+        var profile = await _uow.profileRepository.Get(p => p.Id == profileId);
         if (profile is null) return null;
         return new ChatProfileInfo(profile.Id, profile.Username, profile.DisplayName, profile.ProfilePictureUrl);
     }

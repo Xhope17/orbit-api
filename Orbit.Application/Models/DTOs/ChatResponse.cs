@@ -38,5 +38,6 @@ public record ChatResponse(
     MessageResponse? LastMessage,
     int UnreadCount,
     DateTime CreatedAt,
-    bool IsLastMessageFromCurrentUser
+    bool IsLastMessageFromCurrentUser,
+    bool IsPlaceholder = false
 );
