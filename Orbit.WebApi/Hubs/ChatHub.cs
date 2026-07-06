@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,8 @@ namespace Orbit.WebApi.Hubs;
 [Authorize]
 public class ChatHub : Hub
 {
+    private static readonly ConcurrentDictionary<Guid, HashSet<string>> OnlineConnections = new();
+
     private readonly OrbitDbContext _dbContext;
 
     public ChatHub(OrbitDbContext dbContext)
@@ -33,15 +36,67 @@ public class ChatHub : Hub
     public override async Task OnConnectedAsync()
     {
         var profileId = GetProfileId();
+
+        OnlineConnections.AddOrUpdate(profileId, _ => new HashSet<string> { Context.ConnectionId },
+            (_, set) => { set.Add(Context.ConnectionId); return set; });
+
         await Groups.AddToGroupAsync(Context.ConnectionId, ProfileGroup(profileId));
+
+        var partnerIds = await GetConversationPartnerIdsAsync(profileId);
+
+        foreach (var partnerId in partnerIds)
+        {
+            await Clients.Group(ProfileGroup(partnerId)).SendAsync("UserConnected", profileId);
+        }
+
+        foreach (var partnerId in partnerIds.Where(OnlineConnections.ContainsKey))
+        {
+            await Clients.Caller.SendAsync("UserConnected", partnerId);
+        }
+
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var profileId = GetProfileId();
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, ProfileGroup(profileId));
+        try
+        {
+            var profileId = GetProfileId();
+
+            if (OnlineConnections.TryGetValue(profileId, out var connections))
+            {
+                connections.Remove(Context.ConnectionId);
+                if (connections.Count == 0)
+                {
+                    OnlineConnections.TryRemove(profileId, out _);
+
+                    var partnerIds = await GetConversationPartnerIdsAsync(profileId);
+                    foreach (var partnerId in partnerIds)
+                    {
+                        await Clients.Group(ProfileGroup(partnerId)).SendAsync("UserDisconnected", profileId);
+                    }
+                }
+            }
+
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, ProfileGroup(profileId));
+        }
+        catch
+        {
+            // ignore if context is unavailable on disconnect
+        }
+
         await base.OnDisconnectedAsync(exception);
+    }
+
+    private async Task<List<Guid>> GetConversationPartnerIdsAsync(Guid profileId)
+    {
+        return await _dbContext.ConversationParticipants
+            .Where(cp => _dbContext.ConversationParticipants
+                .Any(cp2 => cp2.ConversationId == cp.ConversationId && cp2.ProfileId == profileId)
+                && cp.ProfileId != profileId)
+            .Select(cp => cp.ProfileId)
+            .Distinct()
+            .ToListAsync();
     }
 
     public async Task JoinConversation(Guid conversationId)
