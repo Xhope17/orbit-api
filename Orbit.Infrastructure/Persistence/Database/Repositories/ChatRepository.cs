@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Repositories;
@@ -109,26 +110,32 @@ public class ChatRepository : IChatRepository
     {
         return _dbContext.Conversations
             .Where(c => c.Participants.Any(p => p.ProfileId == profileId))
-            .Select(c => new ConversationRaw
-            {
-                Id = c.Id,
-                ConversationType = c.ConversationType,
-                CreatedAt = c.CreatedAt,
-                OtherId = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.Id).FirstOrDefault(),
-                OtherUsername = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.Username).FirstOrDefault() ?? "",
-                OtherDisplayName = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.DisplayName).FirstOrDefault() ?? "",
-                OtherAvatarUrl = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.ProfilePictureUrl).FirstOrDefault(),
-                LastMsgId = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.Id).FirstOrDefault(),
-                LastMsgConvId = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.ConversationId).FirstOrDefault(),
-                LastMsgSenderId = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.SenderProfileId).FirstOrDefault(),
-                LastMsgContent = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => m.Content).FirstOrDefault(),
-                LastMsgIsSeen = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (bool?)m.IsSeen).FirstOrDefault(),
-                LastMsgIsEdited = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (bool?)m.IsEdited).FirstOrDefault(),
-                LastMsgEditedAt = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.EditedAt).FirstOrDefault(),
-                LastMsgCreatedAt = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.CreatedAt).FirstOrDefault(),
-                LastMsgDeletedAt = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.DeletedAt).FirstOrDefault(),
-                UnreadCount = c.Messages.Count(m => !m.IsSeen && m.SenderProfileId != profileId)
-            });
+            .Where(c => c.Messages.Any())
+            .Select(RawSelect(profileId));
+    }
+
+    private static Expression<Func<Conversation, ConversationRaw>> RawSelect(Guid profileId)
+    {
+        return c => new ConversationRaw
+        {
+            Id = c.Id,
+            ConversationType = c.ConversationType,
+            CreatedAt = c.CreatedAt,
+            OtherId = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.Id).FirstOrDefault(),
+            OtherUsername = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.Username).FirstOrDefault() ?? "",
+            OtherDisplayName = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.DisplayName).FirstOrDefault() ?? "",
+            OtherAvatarUrl = c.Participants.Where(p => p.ProfileId != profileId).Select(p => p.Profile.ProfilePictureUrl).FirstOrDefault(),
+            LastMsgId = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.Id).FirstOrDefault(),
+            LastMsgConvId = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.ConversationId).FirstOrDefault(),
+            LastMsgSenderId = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (Guid?)m.SenderProfileId).FirstOrDefault(),
+            LastMsgContent = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => m.Content).FirstOrDefault(),
+            LastMsgIsSeen = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (bool?)m.IsSeen).FirstOrDefault(),
+            LastMsgIsEdited = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (bool?)m.IsEdited).FirstOrDefault(),
+            LastMsgEditedAt = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.EditedAt).FirstOrDefault(),
+            LastMsgCreatedAt = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.CreatedAt).FirstOrDefault(),
+            LastMsgDeletedAt = c.Messages.OrderByDescending(m => m.CreatedAt).Select(m => (DateTime?)m.DeletedAt).FirstOrDefault(),
+            UnreadCount = c.Messages.Count(m => !m.IsSeen && m.SenderProfileId != profileId)
+        };
     }
 
     private static ConversationWithDetails MapToDetails(ConversationRaw raw, Guid profileId)

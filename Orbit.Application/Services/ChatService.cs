@@ -45,36 +45,11 @@ public class ChatService : IChatService
                 return Result<ChatResponse>.Success(MapToResponse(details));
         }
 
-        var conversation = new Conversation
-        {
-            Id = Guid.NewGuid(),
-            ConversationType = "dm",
-            CreatedAt = DateTime.UtcNow,
-        };
-
-        var participants = new List<ConversationParticipant>
-        {
-            new()
-            {
-                ConversationId = conversation.Id,
-                ProfileId = currentProfileId,
-                JoinedAt = DateTime.UtcNow,
-            },
-            new()
-            {
-                ConversationId = conversation.Id,
-                ProfileId = targetProfile.Id,
-                JoinedAt = DateTime.UtcNow,
-            },
-        };
-
-        await _chatRepo.CreateConversationAsync(conversation, participants);
-
-        var result = await _chatRepo.GetConversationDetailsAsync(conversation.Id, currentProfileId);
-
-        return result is not null
-            ? Result<ChatResponse>.Success(MapToResponse(result))
-            : Result<ChatResponse>.Failure(ResponseMessages.ConversationNotFound);
+        return Result<ChatResponse>.Success(new ChatResponse(
+            Guid.Empty,
+            new ChatProfileInfo(targetProfile.Id, targetProfile.Username, targetProfile.DisplayName, targetProfile.ProfilePictureUrl),
+            null, 0, DateTime.UtcNow, false
+        ));
     }
 
     public async Task<Result<List<ChatResponse>>> GetConversationsAsync(Guid currentProfileId)
