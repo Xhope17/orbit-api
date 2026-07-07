@@ -4,8 +4,8 @@ public static class DefaultsConstants
 {
     public const string JwtIssuer = "OrbitApi";
     public const string JwtAudience = "OrbitClient";
-    public const int JwtAccessTokenExpirationMinutes = 15;
-    public const int JwtRefreshTokenExpirationDays = 7;
+    public const int JwtAccessTokenExpirationMinutes = 1440; // 1 día
+    public const int JwtRefreshTokenExpirationDays = 15;
 
     public const string RedisConnection = "localhost:6379";
 
