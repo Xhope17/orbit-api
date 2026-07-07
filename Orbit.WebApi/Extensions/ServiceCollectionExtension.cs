@@ -76,8 +76,8 @@ namespace Orbit.WebApi.Extensions
                 Issuer = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtIssuer) ?? DefaultsConstants.JwtIssuer,
                 Audience = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtAudience) ?? DefaultsConstants.JwtAudience,
                 AccessTokenExpirationMinutes = int.TryParse(
-                    Environment.GetEnvironmentVariable(EnvironmentConstants.JwtAccessTokenExpiration), out var accessMin)
-                    ? accessMin : DefaultsConstants.JwtAccessTokenExpirationMinutes,
+                    Environment.GetEnvironmentVariable(EnvironmentConstants.JwtAccessTokenExpiration), out var accessMinutes)
+                    ? accessMinutes : DefaultsConstants.JwtAccessTokenExpirationMinutes,
                 RefreshTokenExpirationDays = int.TryParse(
                     Environment.GetEnvironmentVariable(EnvironmentConstants.JwtRefreshTokenExpiration), out var refreshDays)
                     ? refreshDays : DefaultsConstants.JwtRefreshTokenExpirationDays,
@@ -202,6 +202,7 @@ namespace Orbit.WebApi.Extensions
                         ValidateAudience = true,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
+                        ClockSkew = TimeSpan.Zero,
                         ValidIssuer = jwtIssuer,
                         ValidAudience = jwtAudience,
                         IssuerSigningKey = new SymmetricSecurityKey(
