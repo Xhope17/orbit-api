@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
+using Orbit.Application.Helpers;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Enums;
 using Orbit.Application.Interfaces.Services;
@@ -161,19 +161,7 @@ public class AuthService : IAuthService
         var roles = await GetUserRolesAsync(profile.Id);
         var (accessToken, expiresAt) = _jwtService.GenerateAccessToken(authUser.Id, profile.Id, profile.Username, roles);
 
-        var rawRefreshToken = _jwtService.GenerateRefreshToken();
-        var refreshTokenHash = _passwordHasher.Hash(rawRefreshToken);
-        var tokenKey = ComputeTokenKey(rawRefreshToken);
-
-        var session = new UserSession
-        {
-            Id = Guid.NewGuid(),
-            AuthUserId = authUser.Id,
-            RefreshTokenHash = refreshTokenHash,
-            TokenKey = tokenKey,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            CreatedAt = DateTime.UtcNow,
-        };
+        var (rawRefreshToken, session) = TokenHelper.CreateSession(authUser.Id, _passwordHasher);
 
         await _uow.userSessionRepository.Create(session);
         await _uow.SaveChangesAsync();
@@ -185,7 +173,7 @@ public class AuthService : IAuthService
 
     public async Task<Result> LogoutAsync(string refreshToken)
     {
-        var tokenKey = ComputeTokenKey(refreshToken);
+        var tokenKey = TokenHelper.ComputeTokenKey(refreshToken);
         var session = await _uow.userSessionRepository.Get(s => s.TokenKey == tokenKey);
 
         if (session is not null)
@@ -224,7 +212,7 @@ public class AuthService : IAuthService
         if (profile is null)
             return Result<AuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
 
-        var tokenKey = ComputeTokenKey(refreshToken);
+        var tokenKey = TokenHelper.ComputeTokenKey(refreshToken);
         var validSession = await _uow.userSessionRepository.Get(s =>
             s.TokenKey == tokenKey && s.AuthUserId == authUserId);
 
@@ -241,19 +229,7 @@ public class AuthService : IAuthService
         var roles = await GetUserRolesAsync(profile.Id);
         var (newAccessToken, expiresAt) = _jwtService.GenerateAccessToken(authUserId, profile.Id, profile.Username, roles);
 
-        var rawRefreshToken = _jwtService.GenerateRefreshToken();
-        var refreshTokenHash = _passwordHasher.Hash(rawRefreshToken);
-        var newTokenKey = ComputeTokenKey(rawRefreshToken);
-
-        var newSession = new UserSession
-        {
-            Id = Guid.NewGuid(),
-            AuthUserId = authUserId,
-            RefreshTokenHash = refreshTokenHash,
-            TokenKey = newTokenKey,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            CreatedAt = DateTime.UtcNow,
-        };
+        var (rawRefreshToken, newSession) = TokenHelper.CreateSession(authUserId, _passwordHasher);
 
         await _uow.userSessionRepository.Create(newSession);
         await _uow.SaveChangesAsync();
@@ -360,12 +336,6 @@ public class AuthService : IAuthService
         var roleIds = userRoles.Select(ur => ur.RoleId).ToList();
         var roles = await _uow.roleRepository.GetListAsync(r => roleIds.Contains(r.Id));
         return roles.Select(r => r.Name).ToList();
-    }
-
-    private static string ComputeTokenKey(string rawToken)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
-        return Convert.ToHexStringLower(bytes);
     }
 
     private async Task<UserPrefixResponse?> GetPrefixAsync(Guid? prefixId)
