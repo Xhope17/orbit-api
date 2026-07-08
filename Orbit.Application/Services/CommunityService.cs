@@ -60,6 +60,7 @@ public class CommunityService : ICommunityService
         };
 
         await _uow.communityMemberRepository.Create(ownerMember);
+        await _uow.SaveChangesAsync();
 
         var response = BuildCommunityResponse(community, profile, isMember: true, memberRole: "owner", hasPendingJoinRequest: false, hasPendingInvitation: false);
         return Result<CommunityResponse>.Success(response, ResponseMessages.CommunityCreated);
@@ -138,6 +139,7 @@ public class CommunityService : ICommunityService
             return Result.Failure(ResponseMessages.NoPermission);
 
         await _uow.communityRepository.Delete(community);
+        await _uow.SaveChangesAsync();
         return Result.Success(ResponseMessages.CommunityDeleted);
     }
 
@@ -537,6 +539,7 @@ public class CommunityService : ICommunityService
         };
 
         await _uow.communityJoinRequestRepository.Create(request);
+        await _uow.SaveChangesAsync();
 
         var profile = await _uow.profileRepository.Get(p => p.Id == profileId);
 
@@ -726,6 +729,7 @@ public class CommunityService : ICommunityService
         };
 
         await _uow.communityInvitationRepository.Create(invitation);
+        await _uow.SaveChangesAsync();
         return Result.Success(ResponseMessages.InvitationSent);
     }
 
@@ -1008,9 +1012,9 @@ public class CommunityService : ICommunityService
                     await _uow.postMediaRepository.Create(postMedia);
                 }
             }
-
-            await _uow.SaveChangesAsync();
         }
+
+        await _uow.SaveChangesAsync();
 
         var author = new PostAuthorResponse(profile.Id, profile.Username, profile.DisplayName, profile.ProfilePictureUrl, false);
         return Result<PostResponse>.Success(BuildPostResponse(post, author, false, false, mediaList));
