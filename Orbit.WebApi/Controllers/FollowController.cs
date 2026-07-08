@@ -30,12 +30,12 @@ public class FollowController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _followService.FollowUserAsync(profileId.Value, username);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
@@ -51,12 +51,12 @@ public class FollowController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _followService.UnfollowUserAsync(profileId.Value, username);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
@@ -73,7 +73,7 @@ public class FollowController : BaseController
         var result = await _followService.GetFollowersAsync(username, currentProfileId, page, Math.Clamp(pageSize, 1, 100));
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<PostAuthorDto>>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<PostAuthorDto>>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -90,7 +90,7 @@ public class FollowController : BaseController
         var result = await _followService.GetFollowingAsync(username, currentProfileId, page, Math.Clamp(pageSize, 1, 100));
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<PostAuthorDto>>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<PostAuthorDto>>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }

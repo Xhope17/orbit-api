@@ -31,11 +31,11 @@ public class SavedPostController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.SavePostAsync(profileId.Value, postId);
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -51,11 +51,11 @@ public class SavedPostController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.UnsavePostAsync(profileId.Value, postId);
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -70,7 +70,7 @@ public class SavedPostController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);

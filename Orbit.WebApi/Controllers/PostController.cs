@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.WebApi.Constants;
@@ -11,6 +10,7 @@ using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
 using Orbit.WebApi.Helpers;
+using FluentValidation;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -44,12 +44,12 @@ public class PostController : ControllerBase
         if (!validationResult.IsValid)
         {
             var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed, isSuccess: false));
         }
 
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         List<MediaUploadData>? mediaFiles = null;
         if (request.Media is not null && request.Media.Count > 0)
@@ -64,7 +64,7 @@ public class PostController : ControllerBase
             authUserId.Value, request.Content, mediaFiles);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Created(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -81,7 +81,7 @@ public class PostController : ControllerBase
         var result = await _postService.GetPostAsync(id, currentProfileId);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -109,7 +109,7 @@ public class PostController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.GetFollowingPostsAsync(profileId.Value, page, Math.Clamp(pageSize, 1, 100));
 
@@ -128,7 +128,7 @@ public class PostController : ControllerBase
         var result = await _postService.GetProfilePostsAsync(username, currentProfileId, page, Math.Clamp(pageSize, 1, 100));
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -144,14 +144,14 @@ public class PostController : ControllerBase
     public async Task<GenericResponse<PostDto>> Update(Guid id, [FromForm] UpdatePostRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Content) && (request.Media is null || request.Media.Count == 0))
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Content or media is required"));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Content or media is required", isSuccess: false));
 
         if (request.Content?.Length > 1000)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: ValidationConstants.ContentMaxLength));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: ValidationConstants.ContentMaxLength, isSuccess: false));
 
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         List<MediaUploadData>? mediaFiles = null;
         if (request.Media is not null && request.Media.Count > 0)
@@ -165,7 +165,7 @@ public class PostController : ControllerBase
         var result = await _postService.UpdatePostAsync(authUserId.Value, id, request.Content, mediaFiles);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -181,12 +181,12 @@ public class PostController : ControllerBase
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.DeletePostAsync(authUserId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
@@ -202,12 +202,12 @@ public class PostController : ControllerBase
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.RepostPostAsync(authUserId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Created(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -222,19 +222,19 @@ public class PostController : ControllerBase
     public async Task<GenericResponse<PostDto>> Thread(Guid id, [FromBody] CreateThreadRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Content))
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Thread content is required"));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Thread content is required", isSuccess: false));
 
         if (request.Content.Length > 1000)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Thread content must not exceed 1000 characters"));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Thread content must not exceed 1000 characters", isSuccess: false));
 
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.ThreadPostAsync(authUserId.Value, id, request.Content);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Created(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -250,12 +250,12 @@ public class PostController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.LikePostAsync(profileId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -271,12 +271,12 @@ public class PostController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.UnlikePostAsync(profileId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostLikeResponse>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -295,17 +295,17 @@ public class PostController : ControllerBase
         if (!validationResult.IsValid)
         {
             var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<CommentDto>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<CommentDto>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed, isSuccess: false));
         }
 
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommentDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommentDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.CreateCommentAsync(profileId.Value, id, request.Content, request.ParentCommentId);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommentDto>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommentDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Created(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -333,7 +333,7 @@ public class PostController : ControllerBase
         [FromQuery] string q, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: "Search query must be at least 2 characters"));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: "Search query must be at least 2 characters", isSuccess: false));
 
         var currentProfileId = GetProfileId();
         var result = await _postService.SearchPostsAsync(q, currentProfileId, page, Math.Clamp(pageSize, 1, 100));
@@ -353,7 +353,7 @@ public class PostController : ControllerBase
         var result = await _postService.GetCommentRepliesAsync(id, currentProfileId, page, Math.Clamp(pageSize, 1, 100));
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<CommentDto>>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<CommentDto>>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -369,12 +369,12 @@ public class PostController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.LikeCommentAsync(profileId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -390,12 +390,12 @@ public class PostController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.UnlikeCommentAsync(profileId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommentLikeResponse>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -411,12 +411,12 @@ public class PostController : ControllerBase
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _postService.DeleteCommentAsync(authUserId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }

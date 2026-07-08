@@ -20,6 +20,12 @@ public static class ResponseStatus
         return data;
     }
 
+    public static T Updated<T>(HttpContext context, T data)
+    {
+        context.Response.StatusCode = StatusCodes.Status204NoContent;
+        return data;
+    }
+
     public static T BadRequest<T>(HttpContext context, T data)
     {
         context.Response.StatusCode = StatusCodes.Status400BadRequest;

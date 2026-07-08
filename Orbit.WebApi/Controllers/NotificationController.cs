@@ -39,7 +39,7 @@ public class NotificationController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<NotificationDto>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<NotificationDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _notificationService.GetNotificationsAsync(profileId.Value, page, Math.Clamp(pageSize, 1, 100));
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
@@ -54,7 +54,7 @@ public class NotificationController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<int>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<int>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _notificationService.GetUnreadCountAsync(profileId.Value);
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data, message: result.Message));
@@ -70,12 +70,12 @@ public class NotificationController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _notificationService.MarkAsReadAsync(profileId.Value, id);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
@@ -89,9 +89,9 @@ public class NotificationController : ControllerBase
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _notificationService.MarkAllAsReadAsync(profileId.Value);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: true));
     }
 }

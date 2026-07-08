@@ -101,6 +101,9 @@ public class ChatHub : Hub
 
     public async Task JoinConversation(Guid conversationId)
     {
+        if (conversationId == Guid.Empty)
+            return;
+
         var profileId = GetProfileId();
         var isParticipant = await _dbContext.ConversationParticipants
             .AnyAsync(cp => cp.ConversationId == conversationId && cp.ProfileId == profileId);
@@ -126,12 +129,12 @@ public class ChatHub : Hub
         if (content.Length > DomainConstants.MessageContentMaxLength)
             throw new HubException(ResponseMessages.MessageContentMaxLength);
 
-        var (wasCreated, targetProfile) = await ResolveConversationAsync(conversationId, profileId, targetProfileId);
+        var (wasCreated, targetProfile, resolvedConversationId) = await ResolveConversationAsync(conversationId, profileId, targetProfileId);
 
         var message = new Message
         {
             Id = Guid.NewGuid(),
-            ConversationId = conversationId,
+            ConversationId = resolvedConversationId,
             SenderProfileId = profileId,
             Content = content,
             IsSeen = false,
@@ -149,17 +152,17 @@ public class ChatHub : Hub
 
         var messageDto = BuildMessageBroadcast(message, sender);
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, ConversationGroup(conversationId));
+        await Groups.AddToGroupAsync(Context.ConnectionId, ConversationGroup(resolvedConversationId));
 
         if (wasCreated)
         {
-            await NotifyNewConversationAsync(conversationId, profileId, targetProfile!, sender, message, messageDto);
+            await NotifyNewConversationAsync(resolvedConversationId, profileId, targetProfile!, sender, message, messageDto);
         }
 
         var otherParticipantId = wasCreated
             ? targetProfileId!.Value
             : await _dbContext.ConversationParticipants
-                .Where(cp => cp.ConversationId == conversationId && cp.ProfileId != profileId)
+                .Where(cp => cp.ConversationId == resolvedConversationId && cp.ProfileId != profileId)
                 .Select(cp => cp.ProfileId)
                 .FirstOrDefaultAsync();
 
@@ -198,7 +201,7 @@ public class ChatHub : Hub
             .SendAsync("UserTyping", new { conversationId, profileId });
     }
 
-    private async Task<(bool wasCreated, Profile? targetProfile)> ResolveConversationAsync(
+    private async Task<(bool wasCreated, Profile? targetProfile, Guid conversationId)> ResolveConversationAsync(
         Guid conversationId, Guid profileId, Guid? targetProfileId)
     {
         if (conversationId != Guid.Empty)
@@ -207,18 +210,29 @@ public class ChatHub : Hub
                 .AnyAsync(cp => cp.ConversationId == conversationId && cp.ProfileId == profileId);
 
             if (!isParticipant)
-                throw new HubException("You are not a participant of this conversation");
+            {
+                if (targetProfileId is null || targetProfileId.Value == Guid.Empty)
+                    throw new HubException("You are not a participant of this conversation");
 
-            return (false, null);
+                return await ResolveConversationByTargetAsync(profileId, targetProfileId.Value);
+            }
+
+            return (false, null, conversationId);
         }
 
         if (targetProfileId is null || targetProfileId.Value == Guid.Empty)
             throw new HubException("Target profile is required for a new conversation");
 
-        if (targetProfileId.Value == profileId)
+        return await ResolveConversationByTargetAsync(profileId, targetProfileId.Value);
+    }
+
+    private async Task<(bool wasCreated, Profile? targetProfile, Guid conversationId)> ResolveConversationByTargetAsync(
+        Guid profileId, Guid targetProfileId)
+    {
+        if (targetProfileId == profileId)
             throw new HubException(ResponseMessages.CannotChatYourself);
 
-        var targetProfile = await _dbContext.Profiles.FindAsync(targetProfileId.Value);
+        var targetProfile = await _dbContext.Profiles.FindAsync(targetProfileId);
         if (targetProfile is null)
             throw new HubException(ResponseMessages.ProfileNotFound);
 
@@ -240,7 +254,7 @@ public class ChatHub : Hub
 
         if (existing is not null)
         {
-            return (false, targetProfile);
+            return (false, targetProfile, existing.Id);
         }
 
         var newId = Guid.NewGuid();
@@ -254,13 +268,13 @@ public class ChatHub : Hub
         var participants = new List<ConversationParticipant>
         {
             new() { ConversationId = newId, ProfileId = profileId, JoinedAt = DateTime.UtcNow },
-            new() { ConversationId = newId, ProfileId = targetProfileId.Value, JoinedAt = DateTime.UtcNow },
+            new() { ConversationId = newId, ProfileId = targetProfileId, JoinedAt = DateTime.UtcNow },
         };
 
         _dbContext.Conversations.Add(conversation);
         _dbContext.ConversationParticipants.AddRange(participants);
 
-        return (true, targetProfile);
+        return (true, targetProfile, newId);
     }
 
     private static ChatMessageBroadcast BuildMessageBroadcast(Message message, dynamic sender)

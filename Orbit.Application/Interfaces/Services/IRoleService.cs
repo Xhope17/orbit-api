@@ -1,9 +1,9 @@
-using Orbit.Application.Common;
+using Orbit.Application.Models.Responses;
 
 namespace Orbit.Application.Interfaces.Services;
 
 public interface IRoleService
 {
-    Task<Result> AssignModeratorAsync(Guid adminProfileId, string targetUsername);
-    Task<Result> RemoveModeratorAsync(Guid adminProfileId, string targetUsername);
+    Task<GenericResponse<string>> AssignModeratorAsync(Guid adminProfileId, string targetUsername);
+    Task<GenericResponse<string>> RemoveModeratorAsync(Guid adminProfileId, string targetUsername);
 }

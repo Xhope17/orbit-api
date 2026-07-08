@@ -44,15 +44,15 @@ public class ChatController : BaseController
     {
         var validationResult = await _createChatValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed, isSuccess: false));
 
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ChatDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ChatDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _chatService.CreateConversationAsync(profileId.Value, request.Username);
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, message: result.Message, isSuccess: false));
 
         if (!result.Data!.IsPlaceholder)
         {
@@ -80,7 +80,7 @@ public class ChatController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<List<ChatDto>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<List<ChatDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _chatService.GetConversationsAsync(profileId.Value);
 
@@ -99,13 +99,13 @@ public class ChatController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _chatService.GetMessagesAsync(
             profileId.Value, conversationId, page, Math.Clamp(pageSize, 1, 100));
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -120,15 +120,15 @@ public class ChatController : BaseController
     {
         var validationResult = await _sendMessageValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed, isSuccess: false));
 
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _chatService.SendMessageAsync(profileId.Value, conversationId, request.Content);
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: result.Message, isSuccess: false));
 
         var msg = result.Data!;
         var senderInfo = await _chatService.GetProfileInfoAsync(msg.SenderProfileId);
@@ -162,11 +162,11 @@ public class ChatController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _chatService.DeleteMessageAsync(profileId.Value, conversationId, messageId);
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }

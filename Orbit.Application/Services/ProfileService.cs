@@ -2,9 +2,12 @@ using Orbit.Application.Common;
 using Orbit.Application.Constants;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Enums;
+using Orbit.Application.Helpers;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.DataBase;
 using Orbit.Domain.Entities;
+using Orbit.Domain.Exceptions;
 
 namespace Orbit.Application.Services;
 
@@ -21,19 +24,19 @@ public class ProfileService : IProfileService
         _cloudinaryService = cloudinaryService;
     }
 
-    public async Task<Result<ProfileDto>> GetProfileByUsernameAsync(string username, Guid? currentProfileId = null)
+    public async Task<GenericResponse<ProfileDto>> GetProfileByUsernameAsync(string username, Guid? currentProfileId = null)
     {
         var slug = username.ToLowerInvariant();
         var profile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (profile is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (currentProfileId.HasValue && currentProfileId.Value != profile.Id)
         {
             var isBlocked = await _uow.userBanRepository.Get(b =>
                 b.BlockerProfileId == profile.Id && b.BlockedProfileId == currentProfileId.Value);
             if (isBlocked is not null)
-                return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+                throw new NotFoundException(ResponseMessages.ProfileNotFound);
         }
 
         bool isFollowing = false;
@@ -45,14 +48,14 @@ public class ProfileService : IProfileService
         }
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
-        return Result<ProfileDto>.Success(BuildResponse(profile, prefixResponse, isFollowing));
+        return ResponseHelper.Create(data: BuildResponse(profile, prefixResponse, isFollowing));
     }
 
-    public async Task<Result<ProfileDto>> UpdateProfileAsync(Guid authUserId, string? displayName, string? bio, bool? isPrivate)
+    public async Task<GenericResponse<ProfileDto>> UpdateProfileAsync(Guid authUserId, string? displayName, string? bio, bool? isPrivate)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (displayName is not null) profile.DisplayName = displayName;
         if (bio is not null) profile.Bio = bio;
@@ -63,14 +66,14 @@ public class ProfileService : IProfileService
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
-        return Result<ProfileDto>.Success(BuildResponse(profile, prefixResponse));
+        return ResponseHelper.Create(data: BuildResponse(profile, prefixResponse));
     }
 
-    public async Task<Result<ProfileDto>> UpdateProfilePictureAsync(Guid authUserId, Stream fileStream, string fileName)
+    public async Task<GenericResponse<ProfileDto>> UpdateProfilePictureAsync(Guid authUserId, Stream fileStream, string fileName)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (profile.ProfilePicturePublicId is not null)
         {
@@ -82,7 +85,7 @@ public class ProfileService : IProfileService
         var uploadResult = await _cloudinaryService.UploadAsync(fileStream, uploadFileName, CloudinaryFolder.ProfilePics);
 
         if (!uploadResult.IsSuccess || uploadResult.Data is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.FailedToUploadProfilePicture);
+            throw new BadRequestException(ResponseMessages.FailedToUploadProfilePicture);
 
         profile.ProfilePictureUrl = uploadResult.Data.Url;
         profile.ProfilePicturePublicId = uploadResult.Data.PublicId;
@@ -91,14 +94,14 @@ public class ProfileService : IProfileService
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
-        return Result<ProfileDto>.Success(BuildResponse(profile, prefixResponse));
+        return ResponseHelper.Create(data: BuildResponse(profile, prefixResponse));
     }
 
-    public async Task<Result<ProfileDto>> RemoveProfilePictureAsync(Guid authUserId)
+    public async Task<GenericResponse<ProfileDto>> RemoveProfilePictureAsync(Guid authUserId)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (profile.ProfilePicturePublicId is not null)
         {
@@ -112,14 +115,14 @@ public class ProfileService : IProfileService
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
-        return Result<ProfileDto>.Success(BuildResponse(profile, prefixResponse));
+        return ResponseHelper.Create(data: BuildResponse(profile, prefixResponse));
     }
 
-    public async Task<Result<ProfileDto>> UpdateBannerAsync(Guid authUserId, Stream fileStream, string fileName)
+    public async Task<GenericResponse<ProfileDto>> UpdateBannerAsync(Guid authUserId, Stream fileStream, string fileName)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (profile.BannerPublicId is not null)
         {
@@ -131,7 +134,7 @@ public class ProfileService : IProfileService
         var uploadResult = await _cloudinaryService.UploadAsync(fileStream, uploadFileName, CloudinaryFolder.ProfileBanners);
 
         if (!uploadResult.IsSuccess || uploadResult.Data is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.FailedToUploadBanner);
+            throw new BadRequestException(ResponseMessages.FailedToUploadBanner);
 
         profile.BannerUrl = uploadResult.Data.Url;
         profile.BannerPublicId = uploadResult.Data.PublicId;
@@ -140,14 +143,14 @@ public class ProfileService : IProfileService
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
-        return Result<ProfileDto>.Success(BuildResponse(profile, prefixResponse));
+        return ResponseHelper.Create(data: BuildResponse(profile, prefixResponse));
     }
 
-    public async Task<Result<ProfileDto>> RemoveBannerAsync(Guid authUserId)
+    public async Task<GenericResponse<ProfileDto>> RemoveBannerAsync(Guid authUserId)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (profile.BannerPublicId is not null)
         {
@@ -161,10 +164,10 @@ public class ProfileService : IProfileService
         await _uow.SaveChangesAsync();
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
-        return Result<ProfileDto>.Success(BuildResponse(profile, prefixResponse));
+        return ResponseHelper.Create(data: BuildResponse(profile, prefixResponse));
     }
 
-    public async Task<Result<PagedResult<SearchProfileDto>>> SearchProfilesAsync(
+    public async Task<GenericResponse<PagedResult<SearchProfileDto>>> SearchProfilesAsync(
         string query, Guid? currentProfileId, int page, int pageSize)
     {
         var normalized = query.ToLowerInvariant();
@@ -212,7 +215,7 @@ public class ProfileService : IProfileService
             currentProfileId.HasValue && followedIds.Contains(p.Id)
         )).ToList();
 
-        return Result<PagedResult<SearchProfileDto>>.Success(new PagedResult<SearchProfileDto>
+        return ResponseHelper.Create(data: new PagedResult<SearchProfileDto>
         {
             Items = items,
             TotalCount = totalCount,
@@ -221,18 +224,18 @@ public class ProfileService : IProfileService
         });
     }
 
-    public async Task<Result> BanUserAsync(Guid moderatorProfileId, string username)
+    public async Task<GenericResponse<string>> BanUserAsync(Guid moderatorProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
         var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
-            return Result.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (target.Id == moderatorProfileId)
-            return Result.Failure(ResponseMessages.CannotBanYourself);
+            throw new BadRequestException(ResponseMessages.CannotBanYourself);
 
         if (target.IsBanned)
-            return Result.Failure(ResponseMessages.UserAlreadyBanned);
+            throw new BadRequestException(ResponseMessages.UserAlreadyBanned);
 
         var adminRole = await _uow.roleRepository.Get(r => r.Name == "admin");
         if (adminRole is not null)
@@ -240,7 +243,7 @@ public class ProfileService : IProfileService
             var isAdmin = await _uow.userRoleRepository.Get(ur =>
                 ur.ProfileId == target.Id && ur.RoleId == adminRole.Id);
             if (isAdmin is not null)
-                return Result.Failure(ResponseMessages.CannotBanAdmin);
+                throw new BadRequestException(ResponseMessages.CannotBanAdmin);
         }
 
         target.IsBanned = true;
@@ -249,18 +252,18 @@ public class ProfileService : IProfileService
         await _uow.profileRepository.Update(target);
         await _uow.SaveChangesAsync();
 
-        return Result.Success(ResponseMessages.BanSuccessful);
+        return ResponseHelper.Create<string>(default, message: ResponseMessages.BanSuccessful);
     }
 
-    public async Task<Result> UnbanUserAsync(Guid moderatorProfileId, string username)
+    public async Task<GenericResponse<string>> UnbanUserAsync(Guid moderatorProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
         var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
-            return Result.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (!target.IsBanned)
-            return Result.Failure(ResponseMessages.UserNotBanned);
+            throw new BadRequestException(ResponseMessages.UserNotBanned);
 
         target.IsBanned = false;
         target.BannedAt = null;
@@ -268,28 +271,28 @@ public class ProfileService : IProfileService
         await _uow.profileRepository.Update(target);
         await _uow.SaveChangesAsync();
 
-        return Result.Success(ResponseMessages.UnbanSuccessful);
+        return ResponseHelper.Create<string>(default, message: ResponseMessages.UnbanSuccessful);
     }
 
-    public async Task<Result> BlockUserAsync(Guid blockerProfileId, string username)
+    public async Task<GenericResponse<string>> BlockUserAsync(Guid blockerProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
         var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
-            return Result.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (target.Id == blockerProfileId)
-            return Result.Failure(ResponseMessages.CannotBlockYourself);
+            throw new BadRequestException(ResponseMessages.CannotBlockYourself);
 
         var existingBan = await _uow.userBanRepository.Get(b =>
             b.BlockerProfileId == blockerProfileId && b.BlockedProfileId == target.Id);
         if (existingBan is not null)
-            return Result.Failure(ResponseMessages.AlreadyBlocked);
+            throw new BadRequestException(ResponseMessages.AlreadyBlocked);
 
         var blockedByTarget = await _uow.userBanRepository.Get(b =>
             b.BlockerProfileId == target.Id && b.BlockedProfileId == blockerProfileId);
         if (blockedByTarget is not null)
-            return Result.Failure(ResponseMessages.BlockedByUser);
+            throw new BadRequestException(ResponseMessages.BlockedByUser);
 
         var followToTarget = await _uow.followRepository.Get(f =>
             f.FollowerId == blockerProfileId && f.FollowingId == target.Id);
@@ -374,27 +377,27 @@ public class ProfileService : IProfileService
         }
 
         await _uow.SaveChangesAsync();
-        return Result.Success(ResponseMessages.BlockSuccessful);
+        return ResponseHelper.Create<string>(default, message: ResponseMessages.BlockSuccessful);
     }
 
-    public async Task<Result> UnblockUserAsync(Guid blockerProfileId, string username)
+    public async Task<GenericResponse<string>> UnblockUserAsync(Guid blockerProfileId, string username)
     {
         var slug = username.ToLowerInvariant();
         var target = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (target is null)
-            return Result.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         var ban = await _uow.userBanRepository.Get(b =>
             b.BlockerProfileId == blockerProfileId && b.BlockedProfileId == target.Id);
         if (ban is null)
-            return Result.Failure(ResponseMessages.NotBlocked);
+            throw new BadRequestException(ResponseMessages.NotBlocked);
 
         await _uow.userBanRepository.Delete(ban);
         await _uow.SaveChangesAsync();
-        return Result.Success(ResponseMessages.UnblockSuccessful);
+        return ResponseHelper.Create<string>(default, message: ResponseMessages.UnblockSuccessful);
     }
 
-    public async Task<Result<PagedResult<BlockedUserDto>>> GetBlockedUsersAsync(
+    public async Task<GenericResponse<PagedResult<BlockedUserDto>>> GetBlockedUsersAsync(
         Guid profileId, int page, int pageSize)
     {
         var skip = (page - 1) * pageSize;
@@ -426,7 +429,7 @@ public class ProfileService : IProfileService
             .OfType<BlockedUserDto>()
             .ToList();
 
-        return Result<PagedResult<BlockedUserDto>>.Success(new PagedResult<BlockedUserDto>
+        return ResponseHelper.Create(data: new PagedResult<BlockedUserDto>
         {
             Items = items,
             TotalCount = totalCount,

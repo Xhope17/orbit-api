@@ -1,9 +1,7 @@
 using System.Security.Claims;
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.WebApi.Models;
-using Orbit.Application.Common;
 using Orbit.Application.Constants;
 using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
@@ -19,23 +17,11 @@ namespace Orbit.WebApi.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
-    private readonly IValidator<RegisterRequest> _registerValidator;
-    private readonly IValidator<LoginRequest> _loginValidator;
-    private readonly IValidator<ForgotPasswordRequest> _forgotPasswordValidator;
-    private readonly IValidator<ResetPasswordRequest> _resetPasswordValidator;
 
     public AuthController(
-        IAuthService authService,
-        IValidator<RegisterRequest> registerValidator,
-        IValidator<LoginRequest> loginValidator,
-        IValidator<ForgotPasswordRequest> forgotPasswordValidator,
-        IValidator<ResetPasswordRequest> resetPasswordValidator)
+        IAuthService authService)
     {
         _authService = authService;
-        _registerValidator = registerValidator;
-        _loginValidator = loginValidator;
-        _forgotPasswordValidator = forgotPasswordValidator;
-        _resetPasswordValidator = resetPasswordValidator;
     }
 
     [HttpPost("register")]
@@ -46,20 +32,13 @@ public class AuthController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status409Conflict)]
     public async Task<GenericResponse<RegisterResponse>> Register([FromForm] RegisterRequest request)
     {
-        var validationResult = await _registerValidator.ValidateAsync(request);
-        if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<RegisterResponse>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed));
-        }
-
         Stream? fileStream = null;
         if (request.ProfilePicture is not null)
         {
             fileStream = request.ProfilePicture.OpenReadStream();
         }
 
-        var result = await _authService.RegisterAsync(
+        var rsp = await _authService.RegisterAsync(
             request.Email,
             request.Username,
             request.DisplayName,
@@ -69,17 +48,7 @@ public class AuthController : ControllerBase
             request.Bio
         );
 
-        if (!result.IsSuccess)
-        {
-            return result.Message switch
-            {
-                ResponseMessages.EmailAlreadyRegistered => ResponseStatus.Conflict(HttpContext, ResponseHelper.Create<RegisterResponse>(default, message: result.Message)),
-                ResponseMessages.UsernameAlreadyTaken => ResponseStatus.Conflict(HttpContext, ResponseHelper.Create<RegisterResponse>(default, message: result.Message)),
-                _ => ResponseStatus.InternalServerError(HttpContext, ResponseHelper.Create<RegisterResponse>(default, message: result.Message)),
-            };
-        }
-
-        return ResponseStatus.Created(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        return ResponseStatus.Created(HttpContext, rsp);
     }
 
     [HttpPost("login")]
@@ -90,19 +59,8 @@ public class AuthController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<LoginAuthResponse>> Login([FromBody] LoginRequest request)
     {
-        var validationResult = await _loginValidator.ValidateAsync(request);
-        if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<LoginAuthResponse>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed));
-        }
-
-        var result = await _authService.LoginAsync(request.EmailOrUsername, request.Password);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<LoginAuthResponse>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _authService.LoginAsync(request.EmailOrUsername, request.Password);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpPost("logout")]
@@ -111,8 +69,8 @@ public class AuthController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
     public async Task<GenericResponse<string>> Logout([FromBody] LogoutRequest request)
     {
-        var result = await _authService.LogoutAsync(request.RefreshToken);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _authService.LogoutAsync(request.RefreshToken);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -127,14 +85,10 @@ public class AuthController : ControllerBase
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                        ?? User.FindFirst(ClaimConstants.Sub)?.Value;
         if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var authUserId))
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _authService.GetCurrentUserAsync(authUserId);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _authService.GetCurrentUserAsync(authUserId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpPost("refresh")]
@@ -144,12 +98,8 @@ public class AuthController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<LoginAuthResponse>> Refresh([FromBody] RefreshTokenRequest request)
     {
-        var result = await _authService.RefreshTokenAsync(request.AccessToken, request.RefreshToken);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<LoginAuthResponse>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _authService.RefreshTokenAsync(request.AccessToken, request.RefreshToken);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpPost("forgot-password")]
@@ -158,15 +108,8 @@ public class AuthController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
     public async Task<GenericResponse<string>> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
-        var validationResult = await _forgotPasswordValidator.ValidateAsync(request);
-        if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, errors: [.. errors], message: ResponseMessages.ValidationFailed));
-        }
-
-        var result = await _authService.ForgotPasswordAsync(request.EmailOrUsername);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _authService.ForgotPasswordAsync(request.EmailOrUsername);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpPost("reset-password")]
@@ -176,18 +119,7 @@ public class AuthController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
     public async Task<GenericResponse<string>> ResetPassword([FromBody] ResetPasswordRequest request)
     {
-        var validationResult = await _resetPasswordValidator.ValidateAsync(request);
-        if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, errors: [.. errors], message: ResponseMessages.ValidationFailed));
-        }
-
-        var result = await _authService.ResetPasswordAsync(request.Username, request.Token, request.NewPassword);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _authService.ResetPasswordAsync(request.Username, request.Token, request.NewPassword);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }

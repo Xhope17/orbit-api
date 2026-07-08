@@ -2,6 +2,7 @@ namespace Orbit.Application.Models.Responses
 {
     public class GenericResponse<T>
     {
+        public bool IsSuccess { get; set; } = true;
         public string? Message { get; set; }
         public List<string> Erros { get; set; } = [];
         public DateTime TimeStamp { get; set; } = DateTime.UtcNow;

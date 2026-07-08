@@ -1,8 +1,11 @@
 using Orbit.Application.Common;
+using Orbit.Application.Helpers;
 using Orbit.Application.Models.DTOs;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.DataBase;
 using Orbit.Domain.Entities;
+using Orbit.Domain.Exceptions;
 
 namespace Orbit.Application.Services;
 
@@ -15,7 +18,7 @@ public class NotificationService : INotificationService
         _uow = uow;
     }
 
-    public async Task<Result<PagedResult<NotificationDto>>> GetNotificationsAsync(Guid profileId, int page, int pageSize)
+    public async Task<GenericResponse<PagedResult<NotificationDto>>> GetNotificationsAsync(Guid profileId, int page, int pageSize)
     {
         var skip = (page - 1) * pageSize;
         var notifications = await _uow.notificationRepository.GetPagedAsync(
@@ -44,7 +47,7 @@ public class NotificationService : INotificationService
                 n.CommentId, n.CommentPreview, n.TotalCount, n.IsRead, n.CreatedAt);
         }).ToList();
 
-        return Result<PagedResult<NotificationDto>>.Success(new PagedResult<NotificationDto>
+        return ResponseHelper.Create(new PagedResult<NotificationDto>
         {
             Items = items,
             TotalCount = totalCount,
@@ -53,26 +56,26 @@ public class NotificationService : INotificationService
         });
     }
 
-    public async Task<Result<int>> GetUnreadCountAsync(Guid profileId)
+    public async Task<GenericResponse<int>> GetUnreadCountAsync(Guid profileId)
     {
         var count = await _uow.notificationRepository.CountAsync(n => n.ProfileId == profileId && !n.IsRead);
-        return Result<int>.Success(count);
+        return ResponseHelper.Create(count);
     }
 
-    public async Task<Result> MarkAsReadAsync(Guid profileId, Guid notificationId)
+    public async Task<GenericResponse<string>> MarkAsReadAsync(Guid profileId, Guid notificationId)
     {
         var notif = await _uow.notificationRepository.Get(n => n.Id == notificationId && n.ProfileId == profileId);
         if (notif is null)
-            return Result.Failure("Notification not found");
+            throw new NotFoundException("Notification not found");
 
         notif.IsRead = true;
         notif.UpdatedAt = DateTime.UtcNow;
         await _uow.notificationRepository.Update(notif);
         await _uow.SaveChangesAsync();
-        return Result.Success("Notification marked as read");
+        return ResponseHelper.Create<string>(default, message: "Notification marked as read");
     }
 
-    public async Task<Result> MarkAllAsReadAsync(Guid profileId)
+    public async Task<GenericResponse<string>> MarkAllAsReadAsync(Guid profileId)
     {
         var unread = await _uow.notificationRepository.GetListAsync(n => n.ProfileId == profileId && !n.IsRead);
         foreach (var n in unread)
@@ -82,6 +85,6 @@ public class NotificationService : INotificationService
             await _uow.notificationRepository.Update(n);
         }
         await _uow.SaveChangesAsync();
-        return Result.Success("All notifications marked as read");
+        return ResponseHelper.Create<string>(default, message: "All notifications marked as read");
     }
 }

@@ -37,7 +37,7 @@ public class ProfileController : BaseController
         var result = await _profileService.GetProfileByUsernameAsync(username, currentProfileId);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -56,17 +56,17 @@ public class ProfileController : BaseController
         if (!validationResult.IsValid)
         {
             var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed, isSuccess: false));
         }
 
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _profileService.UpdateProfileAsync(authUserId.Value, request.DisplayName, request.Bio, request.IsPrivate);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -81,17 +81,17 @@ public class ProfileController : BaseController
     public async Task<GenericResponse<ProfileDto>> UpdateAvatar(IFormFile file)
     {
         if (file is null || file.Length == 0)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.FileRequired));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.FileRequired, isSuccess: false));
 
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         using var stream = file.OpenReadStream();
         var result = await _profileService.UpdateProfilePictureAsync(authUserId.Value, stream, file.FileName);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -107,12 +107,12 @@ public class ProfileController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _profileService.RemoveProfilePictureAsync(authUserId.Value);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -127,17 +127,17 @@ public class ProfileController : BaseController
     public async Task<GenericResponse<ProfileDto>> UpdateBanner(IFormFile file)
     {
         if (file is null || file.Length == 0)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.FileRequired));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.FileRequired, isSuccess: false));
 
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         using var stream = file.OpenReadStream();
         var result = await _profileService.UpdateBannerAsync(authUserId.Value, stream, file.FileName);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -153,12 +153,12 @@ public class ProfileController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _profileService.RemoveBannerAsync(authUserId.Value);
 
         if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message));
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
@@ -174,7 +174,7 @@ public class ProfileController : BaseController
         [FromQuery] string q, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         if (string.IsNullOrWhiteSpace(q))
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<SearchProfileDto>>(default, message: "Search query is required"));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<SearchProfileDto>>(default, message: "Search query is required", isSuccess: false));
 
         var currentProfileId = GetProfileId();
         var result = await _profileService.SearchProfilesAsync(
@@ -194,12 +194,12 @@ public class ProfileController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _profileService.BlockUserAsync(profileId.Value, username);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
@@ -215,12 +215,12 @@ public class ProfileController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _profileService.UnblockUserAsync(profileId.Value, username);
 
         if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
 
         return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
@@ -235,7 +235,7 @@ public class ProfileController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<BlockedUserDto>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<BlockedUserDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var result = await _profileService.GetBlockedUsersAsync(profileId.Value, page, Math.Clamp(pageSize, 1, 50));
 

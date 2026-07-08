@@ -1,14 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.WebApi.Models;
-using Orbit.WebApi.Validators;
-using Orbit.Application.Common;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
 using Orbit.WebApi.Helpers;
+using Orbit.Application.Common;
+using Orbit.Application.Helpers;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -16,17 +15,11 @@ namespace Orbit.WebApi.Controllers;
 public class CommunityController : BaseController
 {
     private readonly ICommunityService _communityService;
-    private readonly CreateCommunityValidator _createValidator;
-    private readonly UpdateCommunityValidator _updateValidator;
 
     public CommunityController(
-        ICommunityService communityService,
-        CreateCommunityValidator createValidator,
-        UpdateCommunityValidator updateValidator)
+        ICommunityService communityService)
     {
         _communityService = communityService;
-        _createValidator = createValidator;
-        _updateValidator = updateValidator;
     }
 
     [Authorize]
@@ -38,23 +31,16 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status409Conflict)]
     public async Task<GenericResponse<CommunityDto>> Create([FromBody] CreateCommunityRequest request)
     {
-        var validation = await _createValidator.ValidateAsync(request);
-        if (!validation.IsValid)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<CommunityDto>(default, errors: validation.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
-
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.CreateCommunityAsync(authUserId.Value, request.Name, request.Description, request.IsPrivate);
-        if (!result.IsSuccess)
-            return ResponseStatus.Conflict(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: result.Message));
-
-        return ResponseStatus.Created(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.CreateCommunityAsync(authUserId.Value, request.Name, request.Description, request.IsPrivate);
+        return ResponseStatus.Created(HttpContext, rsp);
     }
 
     [Authorize]
@@ -67,21 +53,12 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<CommunityDto>> Update(string slug, [FromBody] UpdateCommunityRequest request)
     {
-        var validation = await _updateValidator.ValidateAsync(request);
-        if (!validation.IsValid)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<CommunityDto>(default, errors: validation.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
-
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.UpdateCommunityAsync(authUserId.Value, slug, request.Name, request.Description, request.IsPrivate);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.UpdateCommunityAsync(authUserId.Value, slug, request.Name, request.Description, request.IsPrivate);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -95,15 +72,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.DeleteCommunityAsync(authUserId.Value, slug);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.DeleteCommunityAsync(authUserId.Value, slug);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [AllowAnonymous]
@@ -116,11 +88,8 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
 
-        var result = await _communityService.GetCommunityAsync(slug, profileId);
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetCommunityAsync(slug, profileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [AllowAnonymous]
@@ -134,8 +103,8 @@ public class CommunityController : BaseController
         page = Math.Max(1, page);
 
         var profileId = GetProfileId();
-        var result = await _communityService.SearchCommunitiesAsync(q, page, pageSize, profileId);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.SearchCommunitiesAsync(q, page, pageSize, profileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -147,13 +116,13 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunitySummaryDto>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunitySummaryDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
-        var result = await _communityService.GetMyCommunitiesAsync(profileId.Value, page, pageSize);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetMyCommunitiesAsync(profileId.Value, page, pageSize);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -167,15 +136,10 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.JoinCommunityAsync(profileId.Value, slug);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.JoinCommunityAsync(profileId.Value, slug);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -189,15 +153,10 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.LeaveCommunityAsync(profileId.Value, slug);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.LeaveCommunityAsync(profileId.Value, slug);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -211,15 +170,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.KickMemberAsync(authUserId.Value, slug, targetProfileId);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound || result.Message == ResponseMessages.NotMember
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.KickMemberAsync(authUserId.Value, slug, targetProfileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -234,17 +188,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.AssignCoLeaderAsync(authUserId.Value, slug, targetUsername);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound || result.Message == ResponseMessages.ProfileNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : result.Message == ResponseMessages.AlreadyCoLeader
-                    ? ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                    : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.AssignCoLeaderAsync(authUserId.Value, slug, targetUsername);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -259,17 +206,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.RemoveCoLeaderAsync(authUserId.Value, slug, targetUsername);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound || result.Message == ResponseMessages.ProfileNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : result.Message == ResponseMessages.NotCoLeader
-                    ? ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                    : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.RemoveCoLeaderAsync(authUserId.Value, slug, targetUsername);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [AllowAnonymous]
@@ -285,13 +225,8 @@ public class CommunityController : BaseController
         page = Math.Max(1, page);
 
         var profileId = GetProfileId();
-        var result = await _communityService.GetMembersAsync(slug, page, pageSize, profileId);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<CommunityMemberResponse>>(default, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<CommunityMemberResponse>>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetMembersAsync(slug, page, pageSize, profileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -305,15 +240,10 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityJoinRequestResponse>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityJoinRequestResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.RequestJoinAsync(profileId.Value, slug);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<CommunityJoinRequestResponse>(default, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<CommunityJoinRequestResponse>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.RequestJoinAsync(profileId.Value, slug);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -327,18 +257,13 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
-        var result = await _communityService.GetJoinRequestsAsync(authUserId.Value, slug, page, pageSize);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetJoinRequestsAsync(authUserId.Value, slug, page, pageSize);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -352,15 +277,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.ApproveJoinRequestAsync(authUserId.Value, requestId);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.JoinRequestNotFound || result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.ApproveJoinRequestAsync(authUserId.Value, requestId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -374,15 +294,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.RejectJoinRequestAsync(authUserId.Value, requestId);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.JoinRequestNotFound || result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.RejectJoinRequestAsync(authUserId.Value, requestId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -394,13 +309,13 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
-        var result = await _communityService.GetMyJoinRequestsAsync(profileId.Value, page, pageSize);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetMyJoinRequestsAsync(profileId.Value, page, pageSize);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -415,15 +330,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.InviteMemberAsync(authUserId.Value, slug, request.Username);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound || result.Message == ResponseMessages.ProfileNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.InviteMemberAsync(authUserId.Value, slug, request.Username);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -437,18 +347,13 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
-        var result = await _communityService.GetCommunityInvitationsAsync(authUserId.Value, slug, page, pageSize);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetCommunityInvitationsAsync(authUserId.Value, slug, page, pageSize);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -460,13 +365,13 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
-        var result = await _communityService.GetPendingInvitationsAsync(profileId.Value, page, pageSize);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetPendingInvitationsAsync(profileId.Value, page, pageSize);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -480,15 +385,10 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.AcceptInvitationAsync(profileId.Value, invitationId);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.InvitationNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.AcceptInvitationAsync(profileId.Value, invitationId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -502,15 +402,10 @@ public class CommunityController : BaseController
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
 
-        var result = await _communityService.DeclineInvitationAsync(profileId.Value, invitationId);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.InvitationNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var rsp = await _communityService.DeclineInvitationAsync(profileId.Value, invitationId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -526,10 +421,10 @@ public class CommunityController : BaseController
     {
         var authUserId = GetAuthUserId();
         if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken));
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
 
         if (string.IsNullOrWhiteSpace(request.Content))
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Content is required"));
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Content is required", isSuccess: false));
 
         List<MediaUploadData>? mediaFiles = null;
         if (request.Media is not null && request.Media.Count > 0)
@@ -540,15 +435,8 @@ public class CommunityController : BaseController
                 .ToList();
         }
 
-        var result = await _communityService.CreateCommunityPostAsync(authUserId.Value, slug, request.Content, mediaFiles);
-        if (!result.IsSuccess)
-            return result.Message switch
-            {
-                var msg when msg == ResponseMessages.CommunityNotFound || msg == ResponseMessages.ProfileNotFound => ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message)),
-                _ => ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: result.Message))
-            };
-
-        return ResponseStatus.Created(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.CreateCommunityPostAsync(authUserId.Value, slug, request.Content, mediaFiles);
+        return ResponseStatus.Created(HttpContext, rsp);
     }
 
     [AllowAnonymous]
@@ -564,12 +452,7 @@ public class CommunityController : BaseController
         page = Math.Max(1, page);
 
         var profileId = GetProfileId();
-        var result = await _communityService.GetCommunityPostsAsync(slug, profileId, page, pageSize);
-        if (!result.IsSuccess)
-            return result.Message == ResponseMessages.CommunityNotFound
-                ? ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: result.Message))
-                : ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _communityService.GetCommunityPostsAsync(slug, profileId, page, pageSize);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }

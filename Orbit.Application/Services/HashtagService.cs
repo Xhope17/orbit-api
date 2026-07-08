@@ -1,5 +1,6 @@
 using Orbit.Application.Helpers;
 using Orbit.Application.Models.DTOs;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.DataBase;
 using Orbit.Domain.Entities;
@@ -62,7 +63,7 @@ public class HashtagService : IHashtagService
         await _uow.SaveChangesAsync();
     }
 
-    public async Task<List<TrendingHashtagDto>> GetTrendingHashtagsAsync(int hours = 24)
+    public async Task<GenericResponse<List<TrendingHashtagDto>>> GetTrendingHashtagsAsync(int hours = 24)
     {
         var since = DateTime.UtcNow.AddHours(-hours);
 
@@ -84,6 +85,6 @@ public class HashtagService : IHashtagService
                 g.Count()))
             .ToList();
 
-        return trending;
+        return ResponseHelper.Create(data: trending);
     }
 }
