@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Configuration;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
 using Orbit.Application.Helpers;
@@ -17,7 +18,7 @@ public class AuthService : IAuthService
     private readonly IUnitOfWork _uow;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICloudinaryService _cloudinaryService;
-    private readonly IJwtService _jwtService;
+    private readonly IConfiguration _configuration;
     private readonly IEmailService _emailService;
     private readonly IResetTokenService _resetTokenService;
 
@@ -27,14 +28,14 @@ public class AuthService : IAuthService
         IUnitOfWork uow,
         IPasswordHasher passwordHasher,
         ICloudinaryService cloudinaryService,
-        IJwtService jwtService,
+        IConfiguration configuration,
         IEmailService emailService,
         IResetTokenService resetTokenService)
     {
         _uow = uow;
         _passwordHasher = passwordHasher;
         _cloudinaryService = cloudinaryService;
-        _jwtService = jwtService;
+        _configuration = configuration;
         _emailService = emailService;
         _resetTokenService = resetTokenService;
     }
@@ -159,7 +160,8 @@ public class AuthService : IAuthService
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
 
         var roles = await GetUserRolesAsync(profile.Id);
-        var (accessToken, expiresAt) = _jwtService.GenerateAccessToken(authUser.Id, profile.Id, profile.Username, roles);
+        var tokenConfig = TokenHelper.Configuration(_configuration);
+        var accessToken = TokenHelper.Create(authUser.Id, profile.Id, profile.Username, roles, tokenConfig);
 
         var (rawRefreshToken, session) = TokenHelper.CreateSession(authUser.Id, _passwordHasher);
 
@@ -167,7 +169,7 @@ public class AuthService : IAuthService
         await _uow.SaveChangesAsync();
 
         var profileResponse = BuildProfileResponse(profile, prefixResponse);
-        var response = new AuthResponse(accessToken, rawRefreshToken, expiresAt, profileResponse, roles);
+        var response = new AuthResponse(accessToken, rawRefreshToken, tokenConfig.Expiration, profileResponse, roles);
         return Result<AuthResponse>.Success(response, ResponseMessages.LoginSuccessful);
     }
 
@@ -199,7 +201,8 @@ public class AuthService : IAuthService
 
     public async Task<Result<AuthResponse>> RefreshTokenAsync(string accessToken, string refreshToken)
     {
-        var principal = _jwtService.GetPrincipalFromExpiredToken(accessToken);
+        var tokenConfig = TokenHelper.Configuration(_configuration);
+        var principal = TokenHelper.GetPrincipalFromExpiredToken(accessToken, tokenConfig);
         if (principal is null)
             return Result<AuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
 
@@ -227,7 +230,7 @@ public class AuthService : IAuthService
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
 
         var roles = await GetUserRolesAsync(profile.Id);
-        var (newAccessToken, expiresAt) = _jwtService.GenerateAccessToken(authUserId, profile.Id, profile.Username, roles);
+        var newAccessToken = TokenHelper.Create(authUserId, profile.Id, profile.Username, roles, tokenConfig);
 
         var (rawRefreshToken, newSession) = TokenHelper.CreateSession(authUserId, _passwordHasher);
 
@@ -235,7 +238,7 @@ public class AuthService : IAuthService
         await _uow.SaveChangesAsync();
 
         var profileResponse = BuildProfileResponse(profile, prefixResponse);
-        var response = new AuthResponse(newAccessToken, rawRefreshToken, expiresAt, profileResponse, roles);
+        var response = new AuthResponse(newAccessToken, rawRefreshToken, tokenConfig.Expiration, profileResponse, roles);
         return Result<AuthResponse>.Success(response, ResponseMessages.TokenRefreshed);
     }
 
