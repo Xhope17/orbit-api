@@ -43,6 +43,7 @@ public class RoleService : IRoleService
         };
 
         await _uow.userRoleRepository.Create(userRole);
+        await _uow.SaveChangesAsync();
         return Result.Success(ResponseMessages.RoleAssigned);
     }
 

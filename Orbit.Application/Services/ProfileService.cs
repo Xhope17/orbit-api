@@ -371,11 +371,9 @@ public class ProfileService : IProfileService
                     }
                 }
             }
-
-            if (blockedComments.Count > 0)
-                await _uow.SaveChangesAsync();
         }
 
+        await _uow.SaveChangesAsync();
         return Result.Success(ResponseMessages.BlockSuccessful);
     }
 
@@ -392,6 +390,7 @@ public class ProfileService : IProfileService
             return Result.Failure(ResponseMessages.NotBlocked);
 
         await _uow.userBanRepository.Delete(ban);
+        await _uow.SaveChangesAsync();
         return Result.Success(ResponseMessages.UnblockSuccessful);
     }
 
