@@ -16,7 +16,7 @@ public record CommunityMemberResponse(
     DateTime JoinedAt
 );
 
-public record CommunityResponse(
+public record CommunityDto(
     Guid Id,
     string Name,
     string Slug,
@@ -33,7 +33,7 @@ public record CommunityResponse(
     DateTime CreatedAt
 );
 
-public record CommunitySummaryResponse(
+public record CommunitySummaryDto(
     Guid Id,
     string Name,
     string Slug,

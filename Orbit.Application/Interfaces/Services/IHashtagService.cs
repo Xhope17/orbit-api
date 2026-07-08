@@ -5,5 +5,5 @@ namespace Orbit.Application.Interfaces.Services;
 public interface IHashtagService
 {
     Task ProcessPostHashtags(Guid postId, string? content);
-    Task<List<TrendingHashtagResponse>> GetTrendingHashtagsAsync(int hours = 24);
+    Task<List<TrendingHashtagDto>> GetTrendingHashtagsAsync(int hours = 24);
 }

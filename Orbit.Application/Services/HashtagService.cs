@@ -62,7 +62,7 @@ public class HashtagService : IHashtagService
         await _uow.SaveChangesAsync();
     }
 
-    public async Task<List<TrendingHashtagResponse>> GetTrendingHashtagsAsync(int hours = 24)
+    public async Task<List<TrendingHashtagDto>> GetTrendingHashtagsAsync(int hours = 24)
     {
         var since = DateTime.UtcNow.AddHours(-hours);
 
@@ -79,7 +79,7 @@ public class HashtagService : IHashtagService
         var hashtagNames = hashtags.ToDictionary(h => h.Id, h => h.Name);
 
         var trending = grouped
-            .Select(g => new TrendingHashtagResponse(
+            .Select(g => new TrendingHashtagDto(
                 hashtagNames.GetValueOrDefault(g.Key, "unknown"),
                 g.Count()))
             .ToList();

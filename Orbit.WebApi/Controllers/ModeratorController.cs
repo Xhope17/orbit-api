@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
+using Orbit.Application.Helpers;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
+using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -21,41 +24,41 @@ public class ModeratorController : BaseController
     [HttpPost("api/moderator/bans")]
     [EndpointSummary("Banear usuario")]
     [EndpointDescription("Banea a un usuario de la plataforma. No puede iniciar sesión. Solo para moderadores y administradores.")]
-    [ProducesResponseType<Result>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> BanUser([FromBody] ModeratorActionRequest request)
+    public async Task<GenericResponse<string>> BanUser([FromBody] ModeratorActionRequest request)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
 
         var result = await _profileService.BanUserAsync(profileId.Value, request.Username);
 
         if (!result.IsSuccess)
-            return BadRequest(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
 
     [HttpDelete("api/moderator/bans/{username}")]
     [EndpointSummary("Desbanear usuario")]
     [EndpointDescription("Remueve el ban de un usuario de la plataforma. Solo para moderadores y administradores.")]
-    [ProducesResponseType<Result>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> UnbanUser(string username)
+    public async Task<GenericResponse<string>> UnbanUser(string username)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
 
         var result = await _profileService.UnbanUserAsync(profileId.Value, username);
 
         if (!result.IsSuccess)
-            return BadRequest(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
 }
 

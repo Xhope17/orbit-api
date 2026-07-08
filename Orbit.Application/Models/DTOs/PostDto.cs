@@ -1,10 +1,10 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record PostResponse(
+public record PostDto(
     Guid Id,
-    PostAuthorResponse Author,
+    PostAuthorDto Author,
     string? Content,
-    List<PostMediaResponse> Media,
+    List<PostMediaDto> Media,
     int LikeCount,
     int CommentCount,
     int SaveCount,
@@ -15,5 +15,5 @@ public record PostResponse(
     bool IsRepost,
     bool IsThread,
     Guid? OriginalPostId,
-    PostResponse? OriginalPost
+    PostDto? OriginalPost
 );

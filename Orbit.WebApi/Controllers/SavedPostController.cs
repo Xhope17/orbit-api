@@ -2,8 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
+using Orbit.Application.Helpers;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -21,58 +24,58 @@ public class SavedPostController : BaseController
     [HttpPost("{postId:guid}")]
     [EndpointSummary("Guardar post")]
     [EndpointDescription("Guarda un post en la lista del usuario autenticado.")]
-    [ProducesResponseType<Result<SaveResponse>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<Result>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> SavePost(Guid postId)
+    [ProducesResponseType<GenericResponse<PostSaveResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
+    public async Task<GenericResponse<PostSaveResponse>> SavePost(Guid postId)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _postService.SavePostAsync(profileId.Value, postId);
         if (!result.IsSuccess)
-            return NotFound(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
 
     [Authorize]
     [HttpDelete("{postId:guid}")]
     [EndpointSummary("Desguardar post")]
     [EndpointDescription("Elimina un post de la lista de guardados del usuario autenticado.")]
-    [ProducesResponseType<Result<SaveResponse>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<Result>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UnsavePost(Guid postId)
+    [ProducesResponseType<GenericResponse<PostSaveResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
+    public async Task<GenericResponse<PostSaveResponse>> UnsavePost(Guid postId)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _postService.UnsavePostAsync(profileId.Value, postId);
         if (!result.IsSuccess)
-            return NotFound(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
 
     [Authorize]
     [HttpGet]
     [EndpointSummary("Posts guardados")]
     [EndpointDescription("Obtiene los posts guardados por el usuario autenticado, paginados.")]
-    [ProducesResponseType<Result<PagedResult<PostResponse>>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetSavedPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    [ProducesResponseType<GenericResponse<PagedResult<PostDto>>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<PagedResult<PostDto>>> GetSavedPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: ResponseMessages.InvalidToken));
 
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
 
         var result = await _postService.GetSavedPostsAsync(profileId.Value, page, pageSize);
-        return Ok(new { isSuccess = true, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
 }

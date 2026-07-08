@@ -99,13 +99,13 @@ public class FollowService : IFollowService
         return Result.Success(ResponseMessages.UnfollowSuccessful);
     }
 
-    public async Task<Result<PagedResult<PostAuthorResponse>>> GetFollowersAsync(
+    public async Task<Result<PagedResult<PostAuthorDto>>> GetFollowersAsync(
         string username, Guid? currentProfileId, int page, int pageSize)
     {
         var slug = username.ToLowerInvariant();
         var profile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (profile is null)
-            return Result<PagedResult<PostAuthorResponse>>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<PagedResult<PostAuthorDto>>.Failure(ResponseMessages.ProfileNotFound);
 
         var skip = (page - 1) * pageSize;
         var followers = await _uow.followRepository.GetPagedAsync(
@@ -117,7 +117,7 @@ public class FollowService : IFollowService
         var totalCount = await _uow.followRepository.CountAsync(f => f.FollowingId == profile.Id);
 
         var items = await BuildAuthorResponseList(followers, f => f.FollowerId, currentProfileId);
-        return Result<PagedResult<PostAuthorResponse>>.Success(new PagedResult<PostAuthorResponse>
+        return Result<PagedResult<PostAuthorDto>>.Success(new PagedResult<PostAuthorDto>
         {
             Items = items,
             TotalCount = totalCount,
@@ -126,13 +126,13 @@ public class FollowService : IFollowService
         });
     }
 
-    public async Task<Result<PagedResult<PostAuthorResponse>>> GetFollowingAsync(
+    public async Task<Result<PagedResult<PostAuthorDto>>> GetFollowingAsync(
         string username, Guid? currentProfileId, int page, int pageSize)
     {
         var slug = username.ToLowerInvariant();
         var profile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (profile is null)
-            return Result<PagedResult<PostAuthorResponse>>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<PagedResult<PostAuthorDto>>.Failure(ResponseMessages.ProfileNotFound);
 
         var skip = (page - 1) * pageSize;
         var following = await _uow.followRepository.GetPagedAsync(
@@ -144,7 +144,7 @@ public class FollowService : IFollowService
         var totalCount = await _uow.followRepository.CountAsync(f => f.FollowerId == profile.Id);
 
         var items = await BuildAuthorResponseList(following, f => f.FollowingId, currentProfileId);
-        return Result<PagedResult<PostAuthorResponse>>.Success(new PagedResult<PostAuthorResponse>
+        return Result<PagedResult<PostAuthorDto>>.Success(new PagedResult<PostAuthorDto>
         {
             Items = items,
             TotalCount = totalCount,
@@ -153,7 +153,7 @@ public class FollowService : IFollowService
         });
     }
 
-    private async Task<List<PostAuthorResponse>> BuildAuthorResponseList(
+    private async Task<List<PostAuthorDto>> BuildAuthorResponseList(
         List<Follow> follows, Func<Follow, Guid> profileIdSelector, Guid? currentProfileId = null)
     {
         var profileIds = follows.Select(profileIdSelector).Distinct().ToList();
@@ -177,8 +177,8 @@ public class FollowService : IFollowService
                 var p = profileMap.GetValueOrDefault(pid);
                 var isFollowing = currentProfileId.HasValue && followedIds.Contains(pid);
                 return p is not null
-                    ? new PostAuthorResponse(p.Id, p.Username, p.DisplayName, p.ProfilePictureUrl, isFollowing)
-                    : new PostAuthorResponse(pid, "Unknown", "Unknown", null, false);
+                    ? new PostAuthorDto(p.Id, p.Username, p.DisplayName, p.ProfilePictureUrl, isFollowing)
+                    : new PostAuthorDto(pid, "Unknown", "Unknown", null, false);
             })
             .ToList();
     }

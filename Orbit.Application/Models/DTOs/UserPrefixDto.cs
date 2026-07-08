@@ -1,6 +1,6 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record UserPrefixResponse(
+public record UserPrefixDto(
     Guid Id,
     string Name,
     string? Color,

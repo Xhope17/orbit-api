@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
 using Orbit.Application.Models.DTOs;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Enums;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.DataBase;
@@ -22,17 +23,17 @@ public class CommunityService : ICommunityService
         _cloudinaryService = cloudinaryService;
     }
 
-    public async Task<Result<CommunityResponse>> CreateCommunityAsync(Guid authUserId, string name, string? description, bool isPrivate)
+    public async Task<Result<CommunityDto>> CreateCommunityAsync(Guid authUserId, string name, string? description, bool isPrivate)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<CommunityResponse>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<CommunityDto>.Failure(ResponseMessages.ProfileNotFound);
 
         var slug = GenerateSlug(name);
 
         var existingSlug = await _uow.communityRepository.Get(c => c.Slug == slug);
         if (existingSlug is not null)
-            return Result<CommunityResponse>.Failure(ResponseMessages.SlugAlreadyTaken);
+            return Result<CommunityDto>.Failure(ResponseMessages.SlugAlreadyTaken);
 
         var community = new Community
         {
@@ -63,29 +64,29 @@ public class CommunityService : ICommunityService
         await _uow.SaveChangesAsync();
 
         var response = BuildCommunityResponse(community, profile, isMember: true, memberRole: "owner", hasPendingJoinRequest: false, hasPendingInvitation: false);
-        return Result<CommunityResponse>.Success(response, ResponseMessages.CommunityCreated);
+        return Result<CommunityDto>.Success(response, ResponseMessages.CommunityCreated);
     }
 
-    public async Task<Result<CommunityResponse>> UpdateCommunityAsync(Guid authUserId, string slug, string? name, string? description, bool? isPrivate)
+    public async Task<Result<CommunityDto>> UpdateCommunityAsync(Guid authUserId, string slug, string? name, string? description, bool? isPrivate)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<CommunityResponse>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<CommunityDto>.Failure(ResponseMessages.ProfileNotFound);
 
         var community = await _uow.communityRepository.Get(c => c.Slug == slug);
         if (community is null)
-            return Result<CommunityResponse>.Failure(ResponseMessages.CommunityNotFound);
+            return Result<CommunityDto>.Failure(ResponseMessages.CommunityNotFound);
 
         var membership = await _uow.communityMemberRepository.Get(m => m.CommunityId == community.Id && m.ProfileId == profile.Id);
         if (membership is null || (membership.Role != "owner" && membership.Role != "co_leader"))
-            return Result<CommunityResponse>.Failure(ResponseMessages.NoPermission);
+            return Result<CommunityDto>.Failure(ResponseMessages.NoPermission);
 
         if (name is not null && name.Trim() != community.Name)
         {
             var newSlug = GenerateSlug(name);
             var existingSlug = await _uow.communityRepository.Get(c => c.Slug == newSlug && c.Id != community.Id);
             if (existingSlug is not null)
-                return Result<CommunityResponse>.Failure(ResponseMessages.SlugAlreadyTaken);
+                return Result<CommunityDto>.Failure(ResponseMessages.SlugAlreadyTaken);
 
             community.Name = name.Trim();
             community.Slug = newSlug;
@@ -105,7 +106,7 @@ public class CommunityService : ICommunityService
         var ownerResponse = BuildOwnerResponse(ownerProfile!);
         var currentRole = membership.Role;
 
-        var response = new CommunityResponse(
+        var response = new CommunityDto(
             community.Id,
             community.Name,
             community.Slug,
@@ -122,7 +123,7 @@ public class CommunityService : ICommunityService
             community.CreatedAt
         );
 
-        return Result<CommunityResponse>.Success(response, ResponseMessages.CommunityUpdated);
+        return Result<CommunityDto>.Success(response, ResponseMessages.CommunityUpdated);
     }
 
     public async Task<Result> DeleteCommunityAsync(Guid authUserId, string slug)
@@ -143,15 +144,15 @@ public class CommunityService : ICommunityService
         return Result.Success(ResponseMessages.CommunityDeleted);
     }
 
-    public async Task<Result<CommunityResponse>> GetCommunityAsync(string slug, Guid? currentProfileId)
+    public async Task<Result<CommunityDto>> GetCommunityAsync(string slug, Guid? currentProfileId)
     {
         var community = await _uow.communityRepository.Get(c => c.Slug == slug);
         if (community is null)
-            return Result<CommunityResponse>.Failure(ResponseMessages.CommunityNotFound);
+            return Result<CommunityDto>.Failure(ResponseMessages.CommunityNotFound);
 
         var owner = await _uow.profileRepository.Get(p => p.Id == community.OwnerProfileId);
         if (owner is null)
-            return Result<CommunityResponse>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<CommunityDto>.Failure(ResponseMessages.ProfileNotFound);
 
         var isMember = false;
         string? memberRole = null;
@@ -179,13 +180,13 @@ public class CommunityService : ICommunityService
         }
 
         if (community.IsPrivate && !isMember)
-            return Result<CommunityResponse>.Failure(ResponseMessages.CannotJoinPrivate);
+            return Result<CommunityDto>.Failure(ResponseMessages.CannotJoinPrivate);
 
         var response = BuildCommunityResponse(community, owner, isMember, memberRole, hasPendingJoinRequest, hasPendingInvitation);
-        return Result<CommunityResponse>.Success(response);
+        return Result<CommunityDto>.Success(response);
     }
 
-    public async Task<Result<PagedResult<CommunitySummaryResponse>>> SearchCommunitiesAsync(string? query, int page, int pageSize, Guid? currentProfileId = null)
+    public async Task<Result<PagedResult<CommunitySummaryDto>>> SearchCommunitiesAsync(string? query, int page, int pageSize, Guid? currentProfileId = null)
     {
         var skip = (page - 1) * pageSize;
 
@@ -231,7 +232,7 @@ public class CommunityService : ICommunityService
             pendingInvitations = invitations.ToDictionary(inv => inv.CommunityId, _ => true);
         }
 
-        var items = communities.Select(c => new CommunitySummaryResponse(
+        var items = communities.Select(c => new CommunitySummaryDto(
             c.Id,
             c.Name,
             c.Slug,
@@ -243,7 +244,7 @@ public class CommunityService : ICommunityService
             pendingInvitations?.ContainsKey(c.Id)
         )).ToList();
 
-        return Result<PagedResult<CommunitySummaryResponse>>.Success(new PagedResult<CommunitySummaryResponse>
+        return Result<PagedResult<CommunitySummaryDto>>.Success(new PagedResult<CommunitySummaryDto>
         {
             Items = items,
             TotalCount = totalCount,
@@ -252,7 +253,7 @@ public class CommunityService : ICommunityService
         });
     }
 
-    public async Task<Result<PagedResult<CommunitySummaryResponse>>> GetMyCommunitiesAsync(Guid profileId, int page, int pageSize)
+    public async Task<Result<PagedResult<CommunitySummaryDto>>> GetMyCommunitiesAsync(Guid profileId, int page, int pageSize)
     {
         var skip = (page - 1) * pageSize;
 
@@ -261,7 +262,7 @@ public class CommunityService : ICommunityService
 
         if (communityIds.Count == 0)
         {
-            return Result<PagedResult<CommunitySummaryResponse>>.Success(new PagedResult<CommunitySummaryResponse>
+            return Result<PagedResult<CommunitySummaryDto>>.Success(new PagedResult<CommunitySummaryDto>
             {
                 Items = [],
                 TotalCount = 0,
@@ -275,7 +276,7 @@ public class CommunityService : ICommunityService
         var totalCount = communities.Count;
         var ordered = communities.OrderByDescending(c => c.MemberCount).Skip(skip).Take(pageSize).ToList();
 
-        var items = ordered.Select(c => new CommunitySummaryResponse(
+        var items = ordered.Select(c => new CommunitySummaryDto(
             c.Id,
             c.Name,
             c.Slug,
@@ -287,7 +288,7 @@ public class CommunityService : ICommunityService
             HasPendingInvitation: null
         )).ToList();
 
-        return Result<PagedResult<CommunitySummaryResponse>>.Success(new PagedResult<CommunitySummaryResponse>
+        return Result<PagedResult<CommunitySummaryDto>>.Success(new PagedResult<CommunitySummaryDto>
         {
             Items = items,
             TotalCount = totalCount,
@@ -953,19 +954,19 @@ public class CommunityService : ICommunityService
         });
     }
 
-    public async Task<Result<PostResponse>> CreateCommunityPostAsync(Guid authUserId, string slug, string content, List<MediaUploadData>? mediaFiles)
+    public async Task<Result<PostDto>> CreateCommunityPostAsync(Guid authUserId, string slug, string content, List<MediaUploadData>? mediaFiles)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<PostResponse>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<PostDto>.Failure(ResponseMessages.ProfileNotFound);
 
         var community = await _uow.communityRepository.Get(c => c.Slug == slug);
         if (community is null)
-            return Result<PostResponse>.Failure(ResponseMessages.CommunityNotFound);
+            return Result<PostDto>.Failure(ResponseMessages.CommunityNotFound);
 
         var membership = await _uow.communityMemberRepository.Get(m => m.CommunityId == community.Id && m.ProfileId == profile.Id);
         if (membership is null)
-            return Result<PostResponse>.Failure(ResponseMessages.NotMember);
+            return Result<PostDto>.Failure(ResponseMessages.NotMember);
 
         var post = new Post
         {
@@ -1016,25 +1017,25 @@ public class CommunityService : ICommunityService
 
         await _uow.SaveChangesAsync();
 
-        var author = new PostAuthorResponse(profile.Id, profile.Username, profile.DisplayName, profile.ProfilePictureUrl, false);
-        return Result<PostResponse>.Success(BuildPostResponse(post, author, false, false, mediaList));
+        var author = new PostAuthorDto(profile.Id, profile.Username, profile.DisplayName, profile.ProfilePictureUrl, false);
+        return Result<PostDto>.Success(BuildPostDto(post, author, false, false, mediaList));
     }
 
-    public async Task<Result<PagedResult<PostResponse>>> GetCommunityPostsAsync(string slug, Guid? currentProfileId, int page, int pageSize)
+    public async Task<Result<PagedResult<PostDto>>> GetCommunityPostsAsync(string slug, Guid? currentProfileId, int page, int pageSize)
     {
         var community = await _uow.communityRepository.Get(c => c.Slug == slug);
         if (community is null)
-            return Result<PagedResult<PostResponse>>.Failure(ResponseMessages.CommunityNotFound);
+            return Result<PagedResult<PostDto>>.Failure(ResponseMessages.CommunityNotFound);
 
         if (community.IsPrivate && currentProfileId.HasValue)
         {
             var isMember = await _uow.communityMemberRepository.Get(m => m.CommunityId == community.Id && m.ProfileId == currentProfileId.Value);
             if (isMember is null)
-                return Result<PagedResult<PostResponse>>.Failure(ResponseMessages.CannotJoinPrivate);
+                return Result<PagedResult<PostDto>>.Failure(ResponseMessages.CannotJoinPrivate);
         }
         else if (community.IsPrivate && !currentProfileId.HasValue)
         {
-            return Result<PagedResult<PostResponse>>.Failure(ResponseMessages.PrivateCommunityRequiresAuth);
+            return Result<PagedResult<PostDto>>.Failure(ResponseMessages.PrivateCommunityRequiresAuth);
         }
 
         var skip = (page - 1) * pageSize;
@@ -1049,7 +1050,7 @@ public class CommunityService : ICommunityService
 
         if (posts.Count == 0)
         {
-            return Result<PagedResult<PostResponse>>.Success(new PagedResult<PostResponse>
+            return Result<PagedResult<PostDto>>.Success(new PagedResult<PostDto>
             {
                 Items = [],
                 TotalCount = 0,
@@ -1084,13 +1085,13 @@ public class CommunityService : ICommunityService
         {
             var prof = profileMap.GetValueOrDefault(p.ProfileId);
             var author = prof is not null
-                ? new PostAuthorResponse(prof.Id, prof.Username, prof.DisplayName, prof.ProfilePictureUrl, false)
-                : new PostAuthorResponse(p.ProfileId, "Unknown", "Unknown", null, false);
+                ? new PostAuthorDto(prof.Id, prof.Username, prof.DisplayName, prof.ProfilePictureUrl, false)
+                : new PostAuthorDto(p.ProfileId, "Unknown", "Unknown", null, false);
             var media = mediaMap.GetValueOrDefault(p.Id) ?? [];
-            return BuildPostResponse(p, author, likedPostIds.Contains(p.Id), savedPostIds.Contains(p.Id), media);
+            return BuildPostDto(p, author, likedPostIds.Contains(p.Id), savedPostIds.Contains(p.Id), media);
         }).ToList();
 
-        return Result<PagedResult<PostResponse>>.Success(new PagedResult<PostResponse>
+        return Result<PagedResult<PostDto>>.Success(new PagedResult<PostDto>
         {
             Items = items,
             TotalCount = totalCount,
@@ -1099,13 +1100,13 @@ public class CommunityService : ICommunityService
         });
     }
 
-    private static PostResponse BuildPostResponse(Post post, PostAuthorResponse author, bool isLiked, bool isSaved, List<PostMedia> media)
+    private static PostDto BuildPostDto(Post post, PostAuthorDto author, bool isLiked, bool isSaved, List<PostMedia> media)
     {
-        return new PostResponse(
+        return new PostDto(
             post.Id,
             author,
             post.Content,
-            media.OrderBy(m => m.Order).Select(m => new PostMediaResponse(
+            media.OrderBy(m => m.Order).Select(m => new PostMediaDto(
                 m.Url,
                 m.MediaType,
                 m.Order,
@@ -1140,11 +1141,11 @@ public class CommunityService : ICommunityService
         };
     }
 
-    private static CommunityResponse BuildCommunityResponse(Community community, Profile owner, bool isMember, string? memberRole, bool? hasPendingJoinRequest = null, bool? hasPendingInvitation = null)
+    private static CommunityDto BuildCommunityResponse(Community community, Profile owner, bool isMember, string? memberRole, bool? hasPendingJoinRequest = null, bool? hasPendingInvitation = null)
     {
         var ownerResponse = BuildOwnerResponse(owner);
 
-        return new CommunityResponse(
+        return new CommunityDto(
             community.Id,
             community.Name,
             community.Slug,

@@ -1,9 +1,9 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record NotificationResponse(
+public record NotificationDto(
     Guid Id,
     string Type,
-    PostAuthorResponse Actor,
+    PostAuthorDto Actor,
     Guid? PostId,
     string? PostPreview,
     Guid? CommentId,

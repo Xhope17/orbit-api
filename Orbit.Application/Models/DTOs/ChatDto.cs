@@ -32,7 +32,7 @@ public record MessageResponse(
     bool IsFromCurrentUser
 );
 
-public record ChatResponse(
+public record ChatDto(
     Guid Id,
     ChatProfileInfo OtherParticipant,
     MessageResponse? LastMessage,

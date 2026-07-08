@@ -3,8 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using Orbit.WebApi.Constants;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
+using Orbit.Application.Helpers;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -30,65 +33,65 @@ public class NotificationController : ControllerBase
     [HttpGet("api/notifications")]
     [EndpointSummary("Obtener notificaciones")]
     [EndpointDescription("Obtiene el historial paginado de notificaciones del usuario autenticado.")]
-    [ProducesResponseType<Result<PagedResult<NotificationResponse>>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetNotifications([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    [ProducesResponseType<GenericResponse<PagedResult<NotificationDto>>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<PagedResult<NotificationDto>>> GetNotifications([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<NotificationDto>>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _notificationService.GetNotificationsAsync(profileId.Value, page, Math.Clamp(pageSize, 1, 100));
-        return Ok(new { isSuccess = true, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
 
     [HttpGet("api/notifications/unread-count")]
     [EndpointSummary("Contar no leídas")]
     [EndpointDescription("Obtiene la cantidad de notificaciones no leídas del usuario autenticado.")]
-    [ProducesResponseType<Result<int>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetUnreadCount()
+    [ProducesResponseType<GenericResponse<int>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<int>> GetUnreadCount()
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<int>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _notificationService.GetUnreadCountAsync(profileId.Value);
-        return Ok(new { isSuccess = true, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data, message: result.Message));
     }
 
     [HttpPatch("api/notifications/{id:guid}/read")]
     [EndpointSummary("Marcar como leída")]
     [EndpointDescription("Marca una notificación específica como leída.")]
-    [ProducesResponseType<Result>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<Result>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> MarkAsRead(Guid id)
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
+    public async Task<GenericResponse<string>> MarkAsRead(Guid id)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
 
         var result = await _notificationService.MarkAsReadAsync(profileId.Value, id);
 
         if (!result.IsSuccess)
-            return NotFound(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
 
     [HttpPatch("api/notifications/read-all")]
     [EndpointSummary("Marcar todas como leídas")]
     [EndpointDescription("Marca todas las notificaciones del usuario autenticado como leídas.")]
-    [ProducesResponseType<Result>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> MarkAllAsRead()
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<string>> MarkAllAsRead()
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
 
         var result = await _notificationService.MarkAllAsReadAsync(profileId.Value);
-        return Ok(new { isSuccess = true, message = result.Message });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
 }

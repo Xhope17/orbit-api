@@ -1,8 +1,8 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record CommentResponse(
+public record CommentDto(
     Guid Id,
-    PostAuthorResponse Author,
+    PostAuthorDto Author,
     string Content,
     Guid? ParentCommentId,
     int ReplyCount,

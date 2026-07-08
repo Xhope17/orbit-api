@@ -1,16 +1,17 @@
 using Orbit.Application.Common;
 using Orbit.Application.Models.DTOs;
+using Orbit.Application.Models.Responses;
 
 namespace Orbit.Application.Interfaces.Services;
 
 public interface ICommunityService
 {
-    Task<Result<CommunityResponse>> CreateCommunityAsync(Guid authUserId, string name, string? description, bool isPrivate);
-    Task<Result<CommunityResponse>> UpdateCommunityAsync(Guid authUserId, string slug, string? name, string? description, bool? isPrivate);
+    Task<Result<CommunityDto>> CreateCommunityAsync(Guid authUserId, string name, string? description, bool isPrivate);
+    Task<Result<CommunityDto>> UpdateCommunityAsync(Guid authUserId, string slug, string? name, string? description, bool? isPrivate);
     Task<Result> DeleteCommunityAsync(Guid authUserId, string slug);
-    Task<Result<CommunityResponse>> GetCommunityAsync(string slug, Guid? currentProfileId);
-    Task<Result<PagedResult<CommunitySummaryResponse>>> SearchCommunitiesAsync(string? query, int page, int pageSize, Guid? currentProfileId = null);
-    Task<Result<PagedResult<CommunitySummaryResponse>>> GetMyCommunitiesAsync(Guid profileId, int page, int pageSize);
+    Task<Result<CommunityDto>> GetCommunityAsync(string slug, Guid? currentProfileId);
+    Task<Result<PagedResult<CommunitySummaryDto>>> SearchCommunitiesAsync(string? query, int page, int pageSize, Guid? currentProfileId = null);
+    Task<Result<PagedResult<CommunitySummaryDto>>> GetMyCommunitiesAsync(Guid profileId, int page, int pageSize);
     Task<Result> JoinCommunityAsync(Guid profileId, string slug);
     Task<Result> LeaveCommunityAsync(Guid profileId, string slug);
     Task<Result> KickMemberAsync(Guid authUserId, string slug, Guid targetProfileId);
@@ -27,6 +28,6 @@ public interface ICommunityService
     Task<Result> AcceptInvitationAsync(Guid profileId, Guid invitationId);
     Task<Result> DeclineInvitationAsync(Guid profileId, Guid invitationId);
     Task<Result<PagedResult<CommunityJoinRequestResponse>>> GetMyJoinRequestsAsync(Guid profileId, int page, int pageSize);
-    Task<Result<PostResponse>> CreateCommunityPostAsync(Guid authUserId, string slug, string content, List<MediaUploadData>? mediaFiles);
-    Task<Result<PagedResult<PostResponse>>> GetCommunityPostsAsync(string slug, Guid? currentProfileId, int page, int pageSize);
+    Task<Result<PostDto>> CreateCommunityPostAsync(Guid authUserId, string slug, string content, List<MediaUploadData>? mediaFiles);
+    Task<Result<PagedResult<PostDto>>> GetCommunityPostsAsync(string slug, Guid? currentProfileId, int page, int pageSize);
 }

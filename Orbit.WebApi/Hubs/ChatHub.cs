@@ -289,13 +289,13 @@ public class ChatHub : Hub
             message.CreatedAt, message.DeletedAt, true
         );
 
-        var convForOther = new ChatResponse(
+        var convForOther = new ChatDto(
             conversationId,
             new ChatProfileInfo(sender.Id, sender.Username, sender.DisplayName, sender.ProfilePictureUrl),
             lastMsgForOther, 1, DateTime.UtcNow, false
         );
 
-        var convForCaller = new ChatResponse(
+        var convForCaller = new ChatDto(
             conversationId,
             new ChatProfileInfo(targetProfile.Id, targetProfile.Username, targetProfile.DisplayName, targetProfile.ProfilePictureUrl),
             lastMsgForCaller, 0, DateTime.UtcNow, false

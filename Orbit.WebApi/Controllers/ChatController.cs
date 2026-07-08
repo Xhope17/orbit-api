@@ -6,8 +6,11 @@ using Orbit.WebApi.Models;
 using Orbit.WebApi.Hubs;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
+using Orbit.Application.Helpers;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -34,27 +37,22 @@ public class ChatController : BaseController
     [HttpPost("api/chats")]
     [EndpointSummary("Crear conversación")]
     [EndpointDescription("Crea una nueva conversación con otro usuario.")]
-    [ProducesResponseType<Result<ChatResponse>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CreateConversation([FromBody] CreateChatRequest request)
+    [ProducesResponseType<GenericResponse<ChatDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<ChatDto>> CreateConversation([FromBody] CreateChatRequest request)
     {
         var validationResult = await _createChatValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
-            return BadRequest(new
-            {
-                isSuccess = false,
-                message = ResponseMessages.ValidationFailed,
-                errors = validationResult.Errors.Select(e => e.ErrorMessage)
-            });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
 
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ChatDto>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _chatService.CreateConversationAsync(profileId.Value, request.Username);
         if (!result.IsSuccess)
-            return BadRequest(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, message: result.Message));
 
         if (!result.Data!.IsPlaceholder)
         {
@@ -70,72 +68,67 @@ public class ChatController : BaseController
                 .SendAsync("NewConversation", result.Data);
         }
 
-        return Ok(new { isSuccess = true, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data, message: result.Message));
     }
 
     [HttpGet("api/chats")]
     [EndpointSummary("Listar conversaciones")]
     [EndpointDescription("Obtiene las conversaciones del usuario autenticado.")]
-    [ProducesResponseType<Result<List<ChatResponse>>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetConversations()
+    [ProducesResponseType<GenericResponse<List<ChatDto>>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<List<ChatDto>>> GetConversations()
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<List<ChatDto>>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _chatService.GetConversationsAsync(profileId.Value);
 
-        return Ok(new { isSuccess = true, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
 
     [HttpGet("api/chats/{conversationId}/messages")]
     [EndpointSummary("Obtener mensajes")]
     [EndpointDescription("Obtiene los mensajes de una conversación.")]
-    [ProducesResponseType<Result<PagedResult<MessageResponse>>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<Result>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMessages(
+    [ProducesResponseType<GenericResponse<PagedResult<MessageResponse>>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
+    public async Task<GenericResponse<PagedResult<MessageResponse>>> GetMessages(
         Guid conversationId,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _chatService.GetMessagesAsync(
             profileId.Value, conversationId, page, Math.Clamp(pageSize, 1, 100));
 
         if (!result.IsSuccess)
-            return NotFound(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: result.Message));
 
-        return Ok(new { isSuccess = true, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
     }
 
     [HttpPost("api/chats/{conversationId}/messages")]
     [EndpointSummary("Enviar mensaje")]
     [EndpointDescription("Envía un mensaje en una conversación.")]
-    [ProducesResponseType<Result<MessageResponse>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> SendMessage(Guid conversationId, [FromBody] SendMessageRequest request)
+    [ProducesResponseType<GenericResponse<MessageResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<MessageResponse>> SendMessage(Guid conversationId, [FromBody] SendMessageRequest request)
     {
         var validationResult = await _sendMessageValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
-            return BadRequest(new
-            {
-                isSuccess = false,
-                message = ResponseMessages.ValidationFailed,
-                errors = validationResult.Errors.Select(e => e.ErrorMessage)
-            });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
 
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: ResponseMessages.InvalidToken));
 
         var result = await _chatService.SendMessageAsync(profileId.Value, conversationId, request.Content);
         if (!result.IsSuccess)
-            return BadRequest(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: result.Message));
 
         var msg = result.Data!;
         var senderInfo = await _chatService.GetProfileInfoAsync(msg.SenderProfileId);
@@ -156,26 +149,25 @@ public class ChatController : BaseController
             .Group($"conversation:{conversationId}")
             .SendAsync("ReceiveMessage", broadcast);
 
-        return Ok(new { isSuccess = true, data = result.Data });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<MessageResponse>(data: result.Data!, message: result.Message));
     }
 
     [HttpDelete("api/chats/{conversationId}/messages/{messageId}")]
     [EndpointSummary("Eliminar mensaje")]
     [EndpointDescription("Elimina un mensaje específico de una conversación.")]
-    [ProducesResponseType<Result>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<Result>(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteMessage(Guid conversationId, Guid messageId)
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
+    public async Task<GenericResponse<string>> DeleteMessage(Guid conversationId, Guid messageId)
     {
         var profileId = GetProfileId();
         if (profileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
 
         var result = await _chatService.DeleteMessageAsync(profileId.Value, conversationId, messageId);
         if (!result.IsSuccess)
-            return BadRequest(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
-
 }

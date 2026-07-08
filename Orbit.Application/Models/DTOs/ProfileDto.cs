@@ -1,6 +1,6 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record ProfileResponse(
+public record ProfileDto(
     Guid Id,
     string Username,
     string DisplayName,
@@ -10,6 +10,6 @@ public record ProfileResponse(
     int FollowersCount,
     int FollowingCount,
     bool IsVerified,
-    UserPrefixResponse? Prefix,
+    UserPrefixDto? Prefix,
     bool IsFollowing
 );
