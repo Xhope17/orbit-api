@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Configuration;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
 using Orbit.Application.Helpers;
 using Orbit.Application.Models.DTOs;
+using Orbit.Application.Models.Responses.Auth;
 using Orbit.Application.Enums;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.DataBase;
@@ -17,7 +19,7 @@ public class AuthService : IAuthService
     private readonly IUnitOfWork _uow;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ICloudinaryService _cloudinaryService;
-    private readonly IJwtService _jwtService;
+    private readonly IConfiguration _configuration;
     private readonly IEmailService _emailService;
     private readonly IResetTokenService _resetTokenService;
 
@@ -27,14 +29,14 @@ public class AuthService : IAuthService
         IUnitOfWork uow,
         IPasswordHasher passwordHasher,
         ICloudinaryService cloudinaryService,
-        IJwtService jwtService,
+        IConfiguration configuration,
         IEmailService emailService,
         IResetTokenService resetTokenService)
     {
         _uow = uow;
         _passwordHasher = passwordHasher;
         _cloudinaryService = cloudinaryService;
-        _jwtService = jwtService;
+        _configuration = configuration;
         _emailService = emailService;
         _resetTokenService = resetTokenService;
     }
@@ -132,7 +134,7 @@ public class AuthService : IAuthService
         ), ResponseMessages.RegistrationSuccessful);
     }
 
-    public async Task<Result<AuthResponse>> LoginAsync(string emailOrUsername, string password)
+    public async Task<Result<LoginAuthResponse>> LoginAsync(string emailOrUsername, string password)
     {
         var authUser = await _uow.authUserRepository.Get(u => u.Email == emailOrUsername);
 
@@ -144,31 +146,32 @@ public class AuthService : IAuthService
         }
 
         if (authUser is null)
-            return Result<AuthResponse>.Failure(ResponseMessages.InvalidCredentials);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidCredentials);
 
         if (!_passwordHasher.Verify(password, authUser.PasswordHash))
-            return Result<AuthResponse>.Failure(ResponseMessages.InvalidCredentials);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidCredentials);
 
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUser.Id);
         if (profile is null)
-            return Result<AuthResponse>.Failure(ResponseMessages.InvalidCredentials);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidCredentials);
 
         if (profile.IsBanned)
-            return Result<AuthResponse>.Failure(ResponseMessages.AccountBanned);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.AccountBanned);
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
 
         var roles = await GetUserRolesAsync(profile.Id);
-        var (accessToken, expiresAt) = _jwtService.GenerateAccessToken(authUser.Id, profile.Id, profile.Username, roles);
+        var tokenConfig = TokenHelper.Configuration(_configuration);
+        var accessToken = TokenHelper.Create(authUser.Id, profile.Id, profile.Username, roles, tokenConfig);
 
         var (rawRefreshToken, session) = TokenHelper.CreateSession(authUser.Id, _passwordHasher);
 
         await _uow.userSessionRepository.Create(session);
         await _uow.SaveChangesAsync();
 
-        var profileResponse = BuildProfileResponse(profile, prefixResponse);
-        var response = new AuthResponse(accessToken, rawRefreshToken, expiresAt, profileResponse, roles);
-        return Result<AuthResponse>.Success(response, ResponseMessages.LoginSuccessful);
+        var profileResponse = BuildProfileDto(profile, prefixResponse);
+        var response = new LoginAuthResponse(accessToken, rawRefreshToken, tokenConfig.Expiration, profileResponse, roles);
+        return Result<LoginAuthResponse>.Success(response, ResponseMessages.LoginSuccessful);
     }
 
     public async Task<Result> LogoutAsync(string refreshToken)
@@ -185,58 +188,59 @@ public class AuthService : IAuthService
         return Result.Success(ResponseMessages.LoggedOutSuccessfully);
     }
 
-    public async Task<Result<ProfileResponse>> GetCurrentUserAsync(Guid authUserId)
+    public async Task<Result<ProfileDto>> GetCurrentUserAsync(Guid authUserId)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<ProfileResponse>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
-        var profileResponse = BuildProfileResponse(profile, prefixResponse);
+        var profileResponse = BuildProfileDto(profile, prefixResponse);
 
-        return Result<ProfileResponse>.Success(profileResponse);
+        return Result<ProfileDto>.Success(profileResponse);
     }
 
-    public async Task<Result<AuthResponse>> RefreshTokenAsync(string accessToken, string refreshToken)
+    public async Task<Result<LoginAuthResponse>> RefreshTokenAsync(string accessToken, string refreshToken)
     {
-        var principal = _jwtService.GetPrincipalFromExpiredToken(accessToken);
+        var tokenConfig = TokenHelper.Configuration(_configuration);
+        var principal = TokenHelper.GetPrincipalFromExpiredToken(accessToken, tokenConfig);
         if (principal is null)
-            return Result<AuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
 
         var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
                        ?? principal.FindFirst(ClaimConstants.Sub)?.Value;
         if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var authUserId))
-            return Result<AuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
 
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<AuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
 
         var tokenKey = TokenHelper.ComputeTokenKey(refreshToken);
         var validSession = await _uow.userSessionRepository.Get(s =>
             s.TokenKey == tokenKey && s.AuthUserId == authUserId);
 
         if (validSession is null)
-            return Result<AuthResponse>.Failure(ResponseMessages.InvalidRefreshToken);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidRefreshToken);
 
         if (validSession.ExpiresAt < DateTime.UtcNow)
-            return Result<AuthResponse>.Failure(ResponseMessages.SessionExpired);
+            return Result<LoginAuthResponse>.Failure(ResponseMessages.SessionExpired);
 
         await _uow.userSessionRepository.Delete(validSession);
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
 
         var roles = await GetUserRolesAsync(profile.Id);
-        var (newAccessToken, expiresAt) = _jwtService.GenerateAccessToken(authUserId, profile.Id, profile.Username, roles);
+        var newAccessToken = TokenHelper.Create(authUserId, profile.Id, profile.Username, roles, tokenConfig);
 
         var (rawRefreshToken, newSession) = TokenHelper.CreateSession(authUserId, _passwordHasher);
 
         await _uow.userSessionRepository.Create(newSession);
         await _uow.SaveChangesAsync();
 
-        var profileResponse = BuildProfileResponse(profile, prefixResponse);
-        var response = new AuthResponse(newAccessToken, rawRefreshToken, expiresAt, profileResponse, roles);
-        return Result<AuthResponse>.Success(response, ResponseMessages.TokenRefreshed);
+        var profileResponse = BuildProfileDto(profile, prefixResponse);
+        var response = new LoginAuthResponse(newAccessToken, rawRefreshToken, tokenConfig.Expiration, profileResponse, roles);
+        return Result<LoginAuthResponse>.Success(response, ResponseMessages.TokenRefreshed);
     }
 
     public async Task<Result> ForgotPasswordAsync(string emailOrUsername)
@@ -338,17 +342,17 @@ public class AuthService : IAuthService
         return roles.Select(r => r.Name).ToList();
     }
 
-    private async Task<UserPrefixResponse?> GetPrefixAsync(Guid? prefixId)
+    private async Task<UserPrefixDto?> GetPrefixAsync(Guid? prefixId)
     {
         if (!prefixId.HasValue) return null;
 
         var prefix = await _uow.userPrefixRepository.Get(p => p.Id == prefixId.Value);
-        return prefix is null ? null : new UserPrefixResponse(prefix.Id, prefix.Name, prefix.Color, prefix.IconUrl);
+        return prefix is null ? null : new UserPrefixDto(prefix.Id, prefix.Name, prefix.Color, prefix.IconUrl);
     }
 
-    private static ProfileResponse BuildProfileResponse(Profile profile, UserPrefixResponse? prefix)
+    private static ProfileDto BuildProfileDto(Profile profile, UserPrefixDto? prefix)
     {
-        return new ProfileResponse(
+        return new ProfileDto(
             profile.Id,
             profile.Username,
             profile.DisplayName,

@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
+using Orbit.Application.Helpers;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
+using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -21,41 +24,41 @@ public class AdminController : BaseController
     [HttpPost("api/admin/moderators")]
     [EndpointSummary("Asignar moderador")]
     [EndpointDescription("Asigna el rol de moderador a un usuario. Solo para administradores.")]
-    [ProducesResponseType<Result>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> AssignModerator([FromBody] ModeratorRequest request)
+    public async Task<GenericResponse<string>> AssignModerator([FromBody] ModeratorRequest request)
     {
         var adminProfileId = GetProfileId();
         if (adminProfileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
 
         var result = await _roleService.AssignModeratorAsync(adminProfileId.Value, request.Username);
 
         if (!result.IsSuccess)
-            return BadRequest(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
 
     [HttpDelete("api/admin/moderators/{username}")]
     [EndpointSummary("Remover moderador")]
     [EndpointDescription("Remueve el rol de moderador de un usuario. Solo para administradores.")]
-    [ProducesResponseType<Result>(StatusCodes.Status200OK)]
-    [ProducesResponseType<Result>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> RemoveModerator(string username)
+    public async Task<GenericResponse<string>> RemoveModerator(string username)
     {
         var adminProfileId = GetProfileId();
         if (adminProfileId is null)
-            return Unauthorized(new { isSuccess = false, message = ResponseMessages.InvalidToken });
+            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
 
         var result = await _roleService.RemoveModeratorAsync(adminProfileId.Value, username);
 
         if (!result.IsSuccess)
-            return BadRequest(new { isSuccess = false, message = result.Message });
+            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
 
-        return Ok(new { isSuccess = true, message = result.Message });
+        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
     }
 }
 

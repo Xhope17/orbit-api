@@ -20,21 +20,21 @@ public class ChatService : IChatService
         _uow = uow;
     }
 
-    public async Task<Result<ChatResponse>> CreateConversationAsync(Guid currentProfileId, string targetUsername)
+    public async Task<Result<ChatDto>> CreateConversationAsync(Guid currentProfileId, string targetUsername)
     {
         var slug = targetUsername.ToLowerInvariant();
         var targetProfile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (targetProfile is null)
-            return Result<ChatResponse>.Failure(ResponseMessages.ProfileNotFound);
+            return Result<ChatDto>.Failure(ResponseMessages.ProfileNotFound);
 
         if (targetProfile.Id == currentProfileId)
-            return Result<ChatResponse>.Failure(ResponseMessages.CannotChatYourself);
+            return Result<ChatDto>.Failure(ResponseMessages.CannotChatYourself);
 
         if (targetProfile.IsPrivate)
         {
             var hasMutual = await _chatRepo.HasMutualFollowAsync(currentProfileId, targetProfile.Id);
             if (!hasMutual)
-                return Result<ChatResponse>.Failure(ResponseMessages.MutualFollowRequired);
+                return Result<ChatDto>.Failure(ResponseMessages.MutualFollowRequired);
         }
 
         var existing = await _chatRepo.GetExistingDmAsync(currentProfileId, targetProfile.Id);
@@ -42,21 +42,21 @@ public class ChatService : IChatService
         {
             var details = await _chatRepo.GetConversationDetailsAsync(existing.Id, currentProfileId);
             if (details is not null)
-                return Result<ChatResponse>.Success(MapToResponse(details));
+                return Result<ChatDto>.Success(MapToResponse(details));
         }
 
-        return Result<ChatResponse>.Success(new ChatResponse(
+        return Result<ChatDto>.Success(new ChatDto(
             Guid.Empty,
             new ChatProfileInfo(targetProfile.Id, targetProfile.Username, targetProfile.DisplayName, targetProfile.ProfilePictureUrl),
             null, 0, DateTime.UtcNow, false, true
         ));
     }
 
-    public async Task<Result<List<ChatResponse>>> GetConversationsAsync(Guid currentProfileId)
+    public async Task<Result<List<ChatDto>>> GetConversationsAsync(Guid currentProfileId)
     {
         var conversations = await _chatRepo.GetConversationsAsync(currentProfileId);
 
-        return Result<List<ChatResponse>>.Success(
+        return Result<List<ChatDto>>.Success(
             conversations.Select(MapToResponse).ToList()
         );
     }
@@ -151,9 +151,9 @@ public class ChatService : IChatService
         return new ChatProfileInfo(profile.Id, profile.Username, profile.DisplayName, profile.ProfilePictureUrl);
     }
 
-    private static ChatResponse MapToResponse(ConversationWithDetails details)
+    private static ChatDto MapToResponse(ConversationWithDetails details)
     {
-        return new ChatResponse(
+        return new ChatDto(
             details.ConversationId,
             details.OtherParticipant,
             details.LastMessage,

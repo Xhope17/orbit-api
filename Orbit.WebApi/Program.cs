@@ -37,7 +37,7 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 builder.Services.AddInfrastructure();
-builder.Services.AddAuth();
+builder.Services.AddAuth(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {

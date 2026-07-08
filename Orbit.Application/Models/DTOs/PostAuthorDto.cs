@@ -1,6 +1,6 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record SearchProfileResponse(
+public record PostAuthorDto(
     Guid ProfileId,
     string Username,
     string DisplayName,

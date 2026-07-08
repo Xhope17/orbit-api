@@ -7,6 +7,6 @@ public interface IFollowService
 {
     Task<Result> FollowUserAsync(Guid followerProfileId, string username);
     Task<Result> UnfollowUserAsync(Guid followerProfileId, string username);
-    Task<Result<PagedResult<PostAuthorResponse>>> GetFollowersAsync(string username, Guid? currentProfileId, int page, int pageSize);
-    Task<Result<PagedResult<PostAuthorResponse>>> GetFollowingAsync(string username, Guid? currentProfileId, int page, int pageSize);
+    Task<Result<PagedResult<PostAuthorDto>>> GetFollowersAsync(string username, Guid? currentProfileId, int page, int pageSize);
+    Task<Result<PagedResult<PostAuthorDto>>> GetFollowingAsync(string username, Guid? currentProfileId, int page, int pageSize);
 }

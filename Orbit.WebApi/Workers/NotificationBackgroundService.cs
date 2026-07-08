@@ -97,10 +97,10 @@ public class NotificationBackgroundService : BackgroundService
 
                 if (actorProfile is null) continue;
 
-                var response = new NotificationResponse(
+                var response = new NotificationDto(
                     notification.Id,
                     notification.Type,
-                    new PostAuthorResponse(
+                    new PostAuthorDto(
                         actorProfile.Id,
                         actorProfile.Username,
                         actorProfile.DisplayName,

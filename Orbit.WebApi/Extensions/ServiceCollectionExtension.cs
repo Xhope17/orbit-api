@@ -1,9 +1,9 @@
-using System.Text;
 using CloudinaryDotNet;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Orbit.Application.Helpers;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Application.Services;
 using Orbit.Domain.DataBase;
@@ -35,7 +35,6 @@ namespace Orbit.WebApi.Extensions
 
             services.AddCloudinary();
             services.AddHashing();
-            services.AddJwt();
             services.AddRedis();
             services.AddEmail();
             services.AddRepositories();
@@ -65,27 +64,6 @@ namespace Orbit.WebApi.Extensions
         public static IServiceCollection AddHashing(this IServiceCollection services)
         {
             services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
-            return services;
-        }
-
-        public static IServiceCollection AddJwt(this IServiceCollection services)
-        {
-            var jwtOptions = new JwtOptions
-            {
-                Secret = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtSecret) ?? string.Empty,
-                Issuer = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtIssuer) ?? DefaultsConstants.JwtIssuer,
-                Audience = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtAudience) ?? DefaultsConstants.JwtAudience,
-                AccessTokenExpirationMinutes = int.TryParse(
-                    Environment.GetEnvironmentVariable(EnvironmentConstants.JwtAccessTokenExpiration), out var accessMinutes)
-                    ? accessMinutes : DefaultsConstants.JwtAccessTokenExpirationMinutes,
-                RefreshTokenExpirationDays = int.TryParse(
-                    Environment.GetEnvironmentVariable(EnvironmentConstants.JwtRefreshTokenExpiration), out var refreshDays)
-                    ? refreshDays : DefaultsConstants.JwtRefreshTokenExpirationDays,
-            };
-
-            services.AddSingleton(jwtOptions);
-            services.AddScoped<IJwtService, JwtService>();
-
             return services;
         }
 
@@ -186,11 +164,9 @@ namespace Orbit.WebApi.Extensions
             return services;
         }
 
-        public static IServiceCollection AddAuth(this IServiceCollection services)
+        public static IServiceCollection AddAuth(this IServiceCollection services, IConfiguration configuration)
         {
-            var jwtSecret = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtSecret) ?? string.Empty;
-            var jwtIssuer = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtIssuer) ?? DefaultsConstants.JwtIssuer;
-            var jwtAudience = Environment.GetEnvironmentVariable(EnvironmentConstants.JwtAudience) ?? DefaultsConstants.JwtAudience;
+            var tokenConfiguration = TokenHelper.Configuration(configuration);
 
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
@@ -203,10 +179,9 @@ namespace Orbit.WebApi.Extensions
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
                         ClockSkew = TimeSpan.Zero,
-                        ValidIssuer = jwtIssuer,
-                        ValidAudience = jwtAudience,
-                        IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(jwtSecret)),
+                        ValidIssuer = tokenConfiguration.Issuer,
+                        ValidAudience = tokenConfiguration.Audience,
+                        IssuerSigningKey = tokenConfiguration.SecurityKey,
                     };
                 });
 

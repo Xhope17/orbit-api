@@ -1,6 +1,6 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record PostMediaResponse(
+public record PostMediaDto(
     string Url,
     string MediaType,
     int Order,

@@ -1,10 +1,9 @@
 namespace Orbit.Application.Models.DTOs;
 
-public record RegisterResponse(
-    Guid Id,
-    string Email,
+public record SearchProfileDto(
+    Guid ProfileId,
     string Username,
     string DisplayName,
     string? AvatarUrl,
-    string? Bio
+    bool IsFollowing
 );

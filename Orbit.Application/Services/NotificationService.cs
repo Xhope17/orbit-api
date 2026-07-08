@@ -15,7 +15,7 @@ public class NotificationService : INotificationService
         _uow = uow;
     }
 
-    public async Task<Result<PagedResult<NotificationResponse>>> GetNotificationsAsync(Guid profileId, int page, int pageSize)
+    public async Task<Result<PagedResult<NotificationDto>>> GetNotificationsAsync(Guid profileId, int page, int pageSize)
     {
         var skip = (page - 1) * pageSize;
         var notifications = await _uow.notificationRepository.GetPagedAsync(
@@ -36,15 +36,15 @@ public class NotificationService : INotificationService
         {
             var actor = actorMap.GetValueOrDefault(n.ActorProfileId);
             var actorResponse = actor is not null
-                ? new PostAuthorResponse(actor.Id, actor.Username, actor.DisplayName, actor.ProfilePictureUrl, false)
-                : new PostAuthorResponse(n.ActorProfileId, "Unknown", "Unknown", null, false);
+                ? new PostAuthorDto(actor.Id, actor.Username, actor.DisplayName, actor.ProfilePictureUrl, false)
+                : new PostAuthorDto(n.ActorProfileId, "Unknown", "Unknown", null, false);
 
-            return new NotificationResponse(
+            return new NotificationDto(
                 n.Id, n.Type, actorResponse, n.PostId, n.PostPreview,
                 n.CommentId, n.CommentPreview, n.TotalCount, n.IsRead, n.CreatedAt);
         }).ToList();
 
-        return Result<PagedResult<NotificationResponse>>.Success(new PagedResult<NotificationResponse>
+        return Result<PagedResult<NotificationDto>>.Success(new PagedResult<NotificationDto>
         {
             Items = items,
             TotalCount = totalCount,

@@ -1,14 +1,4 @@
-namespace Orbit.Application.Models.DTOs;
-
-public record CommunityJoinRequestResponse(
-    Guid Id,
-    Guid ProfileId,
-    string Username,
-    string DisplayName,
-    string? AvatarUrl,
-    string Status,
-    DateTime CreatedAt
-);
+namespace Orbit.Application.Models.Responses;
 
 public record CommunityInvitationResponse(
     Guid Id,
