@@ -522,10 +522,20 @@ public class PostService : IPostService
         if (originalPost.IsThread)
             throw new BadRequestException(ResponseMessages.CannotRepostThread);
 
+        var originalMedia = await _uow.postMediaRepository.GetListAsync(m => m.PostId == originalPost.Id);
+        var originalAuthor = BuildAuthorResponse(originalPost.Profile);
+        var originalPostDto = BuildPostDto(originalPost, originalAuthor, false, false, originalMedia);
+
         var existingRepost = await _uow.postRepository.Get(p =>
             p.ProfileId == profile.Id && p.OriginalPostId == postId && p.IsRepost);
         if (existingRepost is not null)
-            throw new BadRequestException(ResponseMessages.AlreadyReposted);
+        {
+            var repostAuthor = BuildAuthorResponse(profile);
+            return ResponseHelper.Create(
+                BuildPostDto(existingRepost, repostAuthor, false, false, [], originalPostDto),
+                message: ResponseMessages.AlreadyReposted
+            );
+        }
 
         var repost = new Orbit.Domain.Entities.Post
         {
@@ -545,10 +555,6 @@ public class PostService : IPostService
         profile.UpdatedAt = DateTime.UtcNow;
         await _uow.profileRepository.Update(profile);
         await _uow.SaveChangesAsync();
-
-        var originalMedia = await _uow.postMediaRepository.GetListAsync(m => m.PostId == originalPost.Id);
-        var originalAuthor = BuildAuthorResponse(originalPost.Profile);
-        var originalPostDto = BuildPostDto(originalPost, originalAuthor, false, false, originalMedia);
 
         if (originalPost.ProfileId != profile.Id)
         {
