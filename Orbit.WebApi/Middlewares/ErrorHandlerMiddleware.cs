@@ -38,7 +38,7 @@ namespace Orbit.WebApi.Middlewares
                 var traceId = Guid.NewGuid();
                 var message = ResponseConstants.ErrorUnexpected(traceId.ToString());
 
-                logger.LogCritical("Se generó una excepcion no controlada: con el traceId: {traceId}. Excepción: {exception}", traceId, exception);
+                logger.LogCritical("Se generï¿½ una excepcion no controlada: con el traceId: {traceId}. Excepciï¿½n: {exception}", traceId, exception);
                 await context.Response.WriteAsJsonAsync(ManageException(context, exception, StatusCodes.Status500InternalServerError, message));
             }
         }
@@ -51,6 +51,7 @@ namespace Orbit.WebApi.Middlewares
                 errors: [message ?? exception.Message]
                 );
 
+            response.IsSuccess = false;
             context.Response.StatusCode = statusCode;
             return response;
         }

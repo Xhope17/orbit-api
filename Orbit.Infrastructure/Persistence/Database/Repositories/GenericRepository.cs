@@ -43,7 +43,8 @@ public class GenericRepository<T>(OrbitDbContext context) where T : class
 
     public virtual async Task<T?> Get(Expression<Func<T, bool>> expression)
     {
-        return await DbSet.FirstOrDefaultAsync(expression);
+        //return await DbSet.FirstOrDefaultAsync(expression);
+        return await context.Set<T>().FirstOrDefaultAsync(expression);
     }
 
     public virtual IQueryable<T> Queryable()
