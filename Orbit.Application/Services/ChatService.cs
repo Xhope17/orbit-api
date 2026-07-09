@@ -1,10 +1,13 @@
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
+using Orbit.Application.Helpers;
 using Orbit.Application.Models.DTOs;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.Entities;
 using Orbit.Application.Interfaces.Repositories;
 using Orbit.Domain.DataBase;
+using Orbit.Domain.Exceptions;
 using Orbit.Shared.Constants;
 
 namespace Orbit.Application.Services;
@@ -20,21 +23,21 @@ public class ChatService : IChatService
         _uow = uow;
     }
 
-    public async Task<Result<ChatDto>> CreateConversationAsync(Guid currentProfileId, string targetUsername)
+    public async Task<GenericResponse<ChatDto>> CreateConversationAsync(Guid currentProfileId, string targetUsername)
     {
         var slug = targetUsername.ToLowerInvariant();
         var targetProfile = await _uow.profileRepository.Get(p => p.UsernameSlug == slug);
         if (targetProfile is null)
-            return Result<ChatDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         if (targetProfile.Id == currentProfileId)
-            return Result<ChatDto>.Failure(ResponseMessages.CannotChatYourself);
+            throw new BadRequestException(ResponseMessages.CannotChatYourself);
 
         if (targetProfile.IsPrivate)
         {
             var hasMutual = await _chatRepo.HasMutualFollowAsync(currentProfileId, targetProfile.Id);
             if (!hasMutual)
-                return Result<ChatDto>.Failure(ResponseMessages.MutualFollowRequired);
+                throw new BadRequestException(ResponseMessages.MutualFollowRequired);
         }
 
         var existing = await _chatRepo.GetExistingDmAsync(currentProfileId, targetProfile.Id);
@@ -42,36 +45,36 @@ public class ChatService : IChatService
         {
             var details = await _chatRepo.GetConversationDetailsAsync(existing.Id, currentProfileId);
             if (details is not null)
-                return Result<ChatDto>.Success(MapToResponse(details));
+                return ResponseHelper.Create(MapToResponse(details));
         }
 
-        return Result<ChatDto>.Success(new ChatDto(
+        return ResponseHelper.Create(new ChatDto(
             Guid.Empty,
             new ChatProfileInfo(targetProfile.Id, targetProfile.Username, targetProfile.DisplayName, targetProfile.ProfilePictureUrl),
             null, 0, DateTime.UtcNow, false, true
         ));
     }
 
-    public async Task<Result<List<ChatDto>>> GetConversationsAsync(Guid currentProfileId)
+    public async Task<GenericResponse<List<ChatDto>>> GetConversationsAsync(Guid currentProfileId)
     {
         var conversations = await _chatRepo.GetConversationsAsync(currentProfileId);
 
-        return Result<List<ChatDto>>.Success(
+        return ResponseHelper.Create(
             conversations.Select(MapToResponse).ToList()
         );
     }
 
-    public async Task<Result<PagedResult<MessageResponse>>> GetMessagesAsync(
+    public async Task<GenericResponse<PagedResult<MessageResponse>>> GetMessagesAsync(
         Guid currentProfileId, Guid conversationId, int page, int pageSize)
     {
         var isParticipant = await _chatRepo.IsParticipantAsync(conversationId, currentProfileId);
         if (!isParticipant)
-            return Result<PagedResult<MessageResponse>>.Failure(ResponseMessages.NotConversationParticipant);
+            throw new BadRequestException(ResponseMessages.NotConversationParticipant);
 
         var messages = await _chatRepo.GetMessagesAsync(conversationId, page, pageSize);
         var totalCount = await _chatRepo.GetMessagesCountAsync(conversationId);
 
-        return Result<PagedResult<MessageResponse>>.Success(new PagedResult<MessageResponse>
+        return ResponseHelper.Create(new PagedResult<MessageResponse>
         {
             Items = messages.Select(m => new MessageResponse(
                 m.Id, m.ConversationId, m.SenderProfileId, m.Content,
@@ -84,18 +87,18 @@ public class ChatService : IChatService
         });
     }
 
-    public async Task<Result<MessageResponse>> SendMessageAsync(
+    public async Task<GenericResponse<MessageResponse>> SendMessageAsync(
         Guid currentProfileId, Guid conversationId, string content)
     {
         var isParticipant = await _chatRepo.IsParticipantAsync(conversationId, currentProfileId);
         if (!isParticipant)
-            return Result<MessageResponse>.Failure(ResponseMessages.NotConversationParticipant);
+            throw new BadRequestException(ResponseMessages.NotConversationParticipant);
 
         if (string.IsNullOrWhiteSpace(content))
-            return Result<MessageResponse>.Failure(ResponseMessages.MessageContentRequired);
+            throw new BadRequestException(ResponseMessages.MessageContentRequired);
 
         if (content.Length > DomainConstants.MessageContentMaxLength)
-            return Result<MessageResponse>.Failure(ResponseMessages.MessageContentMaxLength);
+            throw new BadRequestException(ResponseMessages.MessageContentMaxLength);
 
         var message = new Message
         {
@@ -110,7 +113,7 @@ public class ChatService : IChatService
 
         await _chatRepo.AddMessageAsync(message);
 
-        return Result<MessageResponse>.Success(new MessageResponse(
+        return ResponseHelper.Create(new MessageResponse(
             message.Id,
             message.ConversationId,
             message.SenderProfileId,
@@ -124,24 +127,24 @@ public class ChatService : IChatService
         ));
     }
 
-    public async Task<Result> DeleteMessageAsync(
+    public async Task<GenericResponse<string>> DeleteMessageAsync(
         Guid currentProfileId, Guid conversationId, Guid messageId)
     {
         var isParticipant = await _chatRepo.IsParticipantAsync(conversationId, currentProfileId);
         if (!isParticipant)
-            return Result.Failure(ResponseMessages.NotConversationParticipant);
+            throw new BadRequestException(ResponseMessages.NotConversationParticipant);
 
         var message = await _chatRepo.GetMessageOwnershipAsync(messageId, currentProfileId);
         if (message is null)
-            return Result.Failure(ResponseMessages.MessageNotFound);
+            throw new NotFoundException(ResponseMessages.MessageNotFound);
 
         if (message.ConversationId != conversationId)
-            return Result.Failure(ResponseMessages.MessageNotFound);
+            throw new NotFoundException(ResponseMessages.MessageNotFound);
 
         message.DeletedAt = DateTime.UtcNow;
         await _chatRepo.SaveChangesAsync();
 
-        return Result.Success(ResponseMessages.MessageDeleted);
+        return ResponseHelper.Create<string>(default, message: ResponseMessages.MessageDeleted);
     }
 
     public async Task<ChatProfileInfo?> GetProfileInfoAsync(Guid profileId)

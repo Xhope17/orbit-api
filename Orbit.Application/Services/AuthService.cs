@@ -1,15 +1,16 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
-using Orbit.Application.Common;
 using Orbit.Application.Constants;
 using Orbit.Application.Helpers;
+using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Models.Responses.Auth;
 using Orbit.Application.Enums;
 using Orbit.Application.Interfaces.Services;
 using Orbit.Domain.DataBase;
 using Orbit.Domain.Entities;
+using Orbit.Domain.Exceptions;
 using Orbit.Shared.Constants;
 
 namespace Orbit.Application.Services;
@@ -50,7 +51,7 @@ public class AuthService : IAuthService
         });
     }
 
-    public async Task<Result<RegisterResponse>> RegisterAsync(
+    public async Task<GenericResponse<RegisterResponse>> RegisterAsync(
         string email,
         string username,
         string displayName,
@@ -63,11 +64,11 @@ public class AuthService : IAuthService
 
         var emailExists = await _uow.authUserRepository.Get(u => u.Email == email);
         if (emailExists is not null)
-            return Result<RegisterResponse>.Failure(ResponseMessages.EmailAlreadyRegistered);
+            throw new BadRequestException(ResponseMessages.EmailAlreadyRegistered);
 
         var usernameExists = await _uow.profileRepository.Get(p => p.UsernameSlug == usernameSlug);
         if (usernameExists is not null)
-            return Result<RegisterResponse>.Failure(ResponseMessages.UsernameAlreadyTaken);
+            throw new BadRequestException(ResponseMessages.UsernameAlreadyTaken);
 
         var passwordHash = _passwordHasher.Hash(password);
         var authUser = new AuthUser
@@ -129,12 +130,12 @@ public class AuthService : IAuthService
 
         await SendWelcomeEmailAsync(email, displayName, username);
 
-        return Result<RegisterResponse>.Success(new RegisterResponse(
+        return ResponseHelper.Create(new RegisterResponse(
             authUser.Id, email, username, displayName, avatarUrl, bio
-        ), ResponseMessages.RegistrationSuccessful);
+        ), message: ResponseMessages.RegistrationSuccessful);
     }
 
-    public async Task<Result<LoginAuthResponse>> LoginAsync(string emailOrUsername, string password)
+    public async Task<GenericResponse<LoginAuthResponse>> LoginAsync(string emailOrUsername, string password)
     {
         var authUser = await _uow.authUserRepository.Get(u => u.Email == emailOrUsername);
 
@@ -146,17 +147,17 @@ public class AuthService : IAuthService
         }
 
         if (authUser is null)
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidCredentials);
+            throw new BadRequestException(ResponseMessages.InvalidCredentials);
 
         if (!_passwordHasher.Verify(password, authUser.PasswordHash))
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidCredentials);
+            throw new BadRequestException(ResponseMessages.InvalidCredentials);
 
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUser.Id);
         if (profile is null)
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidCredentials);
+            throw new BadRequestException(ResponseMessages.InvalidCredentials);
 
         if (profile.IsBanned)
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.AccountBanned);
+            throw new BadRequestException(ResponseMessages.AccountBanned);
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
 
@@ -171,10 +172,10 @@ public class AuthService : IAuthService
 
         var profileResponse = BuildProfileDto(profile, prefixResponse);
         var response = new LoginAuthResponse(accessToken, rawRefreshToken, tokenConfig.Expiration, profileResponse, roles);
-        return Result<LoginAuthResponse>.Success(response, ResponseMessages.LoginSuccessful);
+        return ResponseHelper.Create(response, message: ResponseMessages.LoginSuccessful);
     }
 
-    public async Task<Result> LogoutAsync(string refreshToken)
+    public async Task<GenericResponse<string>> LogoutAsync(string refreshToken)
     {
         var tokenKey = TokenHelper.ComputeTokenKey(refreshToken);
         var session = await _uow.userSessionRepository.Get(s => s.TokenKey == tokenKey);
@@ -185,46 +186,46 @@ public class AuthService : IAuthService
             await _uow.SaveChangesAsync();
         }
 
-        return Result.Success(ResponseMessages.LoggedOutSuccessfully);
+        return ResponseHelper.Create(string.Empty, message: ResponseMessages.LoggedOutSuccessfully);
     }
 
-    public async Task<Result<ProfileDto>> GetCurrentUserAsync(Guid authUserId)
+    public async Task<GenericResponse<ProfileDto>> GetCurrentUserAsync(Guid authUserId)
     {
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<ProfileDto>.Failure(ResponseMessages.ProfileNotFound);
+            throw new NotFoundException(ResponseMessages.ProfileNotFound);
 
         var prefixResponse = await GetPrefixAsync(profile.PrefixId);
         var profileResponse = BuildProfileDto(profile, prefixResponse);
 
-        return Result<ProfileDto>.Success(profileResponse);
+        return ResponseHelper.Create(profileResponse);
     }
 
-    public async Task<Result<LoginAuthResponse>> RefreshTokenAsync(string accessToken, string refreshToken)
+    public async Task<GenericResponse<LoginAuthResponse>> RefreshTokenAsync(string accessToken, string refreshToken)
     {
         var tokenConfig = TokenHelper.Configuration(_configuration);
         var principal = TokenHelper.GetPrincipalFromExpiredToken(accessToken, tokenConfig);
         if (principal is null)
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
+            throw new BadRequestException(ResponseMessages.InvalidOrExpiredToken);
 
         var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
                        ?? principal.FindFirst(ClaimConstants.Sub)?.Value;
         if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var authUserId))
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
+            throw new BadRequestException(ResponseMessages.InvalidOrExpiredToken);
 
         var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUserId);
         if (profile is null)
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidOrExpiredToken);
+            throw new BadRequestException(ResponseMessages.InvalidOrExpiredToken);
 
         var tokenKey = TokenHelper.ComputeTokenKey(refreshToken);
         var validSession = await _uow.userSessionRepository.Get(s =>
             s.TokenKey == tokenKey && s.AuthUserId == authUserId);
 
         if (validSession is null)
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.InvalidRefreshToken);
+            throw new BadRequestException(ResponseMessages.InvalidRefreshToken);
 
         if (validSession.ExpiresAt < DateTime.UtcNow)
-            return Result<LoginAuthResponse>.Failure(ResponseMessages.SessionExpired);
+            throw new BadRequestException(ResponseMessages.SessionExpired);
 
         await _uow.userSessionRepository.Delete(validSession);
 
@@ -240,10 +241,10 @@ public class AuthService : IAuthService
 
         var profileResponse = BuildProfileDto(profile, prefixResponse);
         var response = new LoginAuthResponse(newAccessToken, rawRefreshToken, tokenConfig.Expiration, profileResponse, roles);
-        return Result<LoginAuthResponse>.Success(response, ResponseMessages.TokenRefreshed);
+        return ResponseHelper.Create(response, message: ResponseMessages.TokenRefreshed);
     }
 
-    public async Task<Result> ForgotPasswordAsync(string emailOrUsername)
+    public async Task<GenericResponse<string>> ForgotPasswordAsync(string emailOrUsername)
     {
         var normalizedInput = emailOrUsername.ToLowerInvariant();
         var authUser = await _uow.authUserRepository.Get(u => u.Email == normalizedInput);
@@ -259,7 +260,7 @@ public class AuthService : IAuthService
         {
             var profile = await _uow.profileRepository.Get(p => p.AuthUserId == authUser.Id);
             if (profile is null)
-                return Result.Success(ResponseMessages.CheckYourInbox);
+                return ResponseHelper.Create(string.Empty, message: ResponseMessages.CheckYourInbox);
 
             var toName = profile.DisplayName;
             var usernameSlug = profile.UsernameSlug;
@@ -285,24 +286,24 @@ public class AuthService : IAuthService
             }
         }
 
-        return Result.Success(ResponseMessages.CheckYourInbox);
+        return ResponseHelper.Create(string.Empty, message: ResponseMessages.CheckYourInbox);
     }
 
-    public async Task<Result> ResetPasswordAsync(string username, string token, string newPassword)
+    public async Task<GenericResponse<string>> ResetPasswordAsync(string username, string token, string newPassword)
     {
         var usernameSlug = username.ToLowerInvariant();
         var storedToken = await _resetTokenService.GetTokenAsync(usernameSlug);
 
         if (storedToken is null || storedToken != token)
-            return Result.Failure(ResponseMessages.InvalidOrExpiredToken);
+            throw new BadRequestException(ResponseMessages.InvalidOrExpiredToken);
 
         var profile = await _uow.profileRepository.Get(p => p.UsernameSlug == usernameSlug);
         if (profile is null)
-            return Result.Failure(ResponseMessages.InvalidOrExpiredToken);
+            throw new BadRequestException(ResponseMessages.InvalidOrExpiredToken);
 
         var authUser = await _uow.authUserRepository.Get(u => u.Id == profile.AuthUserId);
         if (authUser is null)
-            return Result.Failure(ResponseMessages.InvalidOrExpiredToken);
+            throw new BadRequestException(ResponseMessages.InvalidOrExpiredToken);
 
         authUser.PasswordHash = _passwordHasher.Hash(newPassword);
         authUser.UpdatedAt = DateTime.UtcNow;
@@ -311,7 +312,7 @@ public class AuthService : IAuthService
 
         await _resetTokenService.RemoveTokenAsync(usernameSlug);
 
-        return Result.Success(ResponseMessages.PasswordResetSuccessful);
+        return ResponseHelper.Create(string.Empty, message: ResponseMessages.PasswordResetSuccessful);
     }
 
     private async Task SendWelcomeEmailAsync(string email, string displayName, string username)
