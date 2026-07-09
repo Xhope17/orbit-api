@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Orbit.Application.Common;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
@@ -29,16 +28,9 @@ public class ModeratorController : BaseController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<GenericResponse<string>> BanUser([FromBody] ModeratorActionRequest request)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
-
-        var result = await _profileService.BanUserAsync(profileId.Value, request.Username);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.BanUserAsync(profileId, request.Username);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpDelete("api/moderator/bans/{username}")]
@@ -49,16 +41,9 @@ public class ModeratorController : BaseController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<GenericResponse<string>> UnbanUser(string username)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
-
-        var result = await _profileService.UnbanUserAsync(profileId.Value, username);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.UnbanUserAsync(profileId, username);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }
 

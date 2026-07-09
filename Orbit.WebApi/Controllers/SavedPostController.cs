@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
@@ -29,15 +29,9 @@ public class SavedPostController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<PostSaveResponse>> SavePost(Guid postId)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _postService.SavePostAsync(profileId.Value, postId);
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _postService.SavePostAsync(profileId, postId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -49,15 +43,9 @@ public class SavedPostController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<PostSaveResponse>> UnsavePost(Guid postId)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _postService.UnsavePostAsync(profileId.Value, postId);
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PostSaveResponse>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _postService.UnsavePostAsync(profileId, postId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -68,14 +56,10 @@ public class SavedPostController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<PagedResult<PostDto>>> GetSavedPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<PostDto>>(default, message: ResponseMessages.InvalidToken));
-
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
-
-        var result = await _postService.GetSavedPostsAsync(profileId.Value, page, pageSize);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _postService.GetSavedPostsAsync(profileId, page, pageSize);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }

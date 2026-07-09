@@ -1,4 +1,3 @@
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -6,10 +5,10 @@ using Orbit.WebApi.Models;
 using Orbit.WebApi.Hubs;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
@@ -18,19 +17,13 @@ namespace Orbit.WebApi.Controllers;
 public class ChatController : BaseController
 {
     private readonly IChatService _chatService;
-    private readonly IValidator<CreateChatRequest> _createChatValidator;
-    private readonly IValidator<SendMessageRequest> _sendMessageValidator;
     private readonly IHubContext<ChatHub> _hubContext;
 
     public ChatController(
         IChatService chatService,
-        IValidator<CreateChatRequest> createChatValidator,
-        IValidator<SendMessageRequest> sendMessageValidator,
         IHubContext<ChatHub> hubContext)
     {
         _chatService = chatService;
-        _createChatValidator = createChatValidator;
-        _sendMessageValidator = sendMessageValidator;
         _hubContext = hubContext;
     }
 
@@ -42,33 +35,24 @@ public class ChatController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<ChatDto>> CreateConversation([FromBody] CreateChatRequest request)
     {
-        var validationResult = await _createChatValidator.ValidateAsync(request);
-        if (!validationResult.IsValid)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _chatService.CreateConversationAsync(profileId, request.Username);
 
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ChatDto>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _chatService.CreateConversationAsync(profileId.Value, request.Username);
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ChatDto>(default, message: result.Message));
-
-        if (!result.Data!.IsPlaceholder)
+        if (!rsp.Data!.IsPlaceholder)
         {
-            var currentProfileId = profileId.Value;
-            var otherProfileId = result.Data!.OtherParticipant.ProfileId;
+            var currentProfileId = profileId;
+            var otherProfileId = rsp.Data!.OtherParticipant.ProfileId;
 
             await _hubContext.Clients
                 .Group($"profile:{otherProfileId}")
-                .SendAsync("NewConversation", result.Data);
+                .SendAsync("NewConversation", rsp.Data);
 
             await _hubContext.Clients
                 .Group($"profile:{currentProfileId}")
-                .SendAsync("NewConversation", result.Data);
+                .SendAsync("NewConversation", rsp.Data);
         }
 
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data, message: result.Message));
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpGet("api/chats")]
@@ -78,13 +62,9 @@ public class ChatController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<List<ChatDto>>> GetConversations()
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<List<ChatDto>>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _chatService.GetConversationsAsync(profileId.Value);
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _chatService.GetConversationsAsync(profileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpGet("api/chats/{conversationId}/messages")]
@@ -97,17 +77,9 @@ public class ChatController : BaseController
         Guid conversationId,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _chatService.GetMessagesAsync(
-            profileId.Value, conversationId, page, Math.Clamp(pageSize, 1, 100));
-
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<PagedResult<MessageResponse>>(default, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _chatService.GetMessagesAsync(profileId, conversationId, page, Math.Clamp(pageSize, 1, 100));
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpPost("api/chats/{conversationId}/messages")]
@@ -118,19 +90,10 @@ public class ChatController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<MessageResponse>> SendMessage(Guid conversationId, [FromBody] SendMessageRequest request)
     {
-        var validationResult = await _sendMessageValidator.ValidateAsync(request);
-        if (!validationResult.IsValid)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, errors: validationResult.Errors.Select(e => e.ErrorMessage).ToList(), message: ResponseMessages.ValidationFailed));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _chatService.SendMessageAsync(profileId, conversationId, request.Content);
 
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _chatService.SendMessageAsync(profileId.Value, conversationId, request.Content);
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<MessageResponse>(default, message: result.Message));
-
-        var msg = result.Data!;
+        var msg = rsp.Data!;
         var senderInfo = await _chatService.GetProfileInfoAsync(msg.SenderProfileId);
 
         var broadcast = new ChatMessageBroadcast(
@@ -149,7 +112,7 @@ public class ChatController : BaseController
             .Group($"conversation:{conversationId}")
             .SendAsync("ReceiveMessage", broadcast);
 
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<MessageResponse>(data: result.Data!, message: result.Message));
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpDelete("api/chats/{conversationId}/messages/{messageId}")]
@@ -160,14 +123,8 @@ public class ChatController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<string>> DeleteMessage(Guid conversationId, Guid messageId)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
-
-        var result = await _chatService.DeleteMessageAsync(profileId.Value, conversationId, messageId);
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _chatService.DeleteMessageAsync(profileId, conversationId, messageId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }

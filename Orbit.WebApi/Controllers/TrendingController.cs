@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
@@ -22,10 +21,10 @@ public class TrendingController : ControllerBase
     [HttpGet("api/trending")]
     [EndpointSummary("Obtener tendencias")]
     [EndpointDescription("Devuelve los hashtags más usados en las últimas 24 horas.")]
-    [ProducesResponseType<List<TrendingHashtagDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<GenericResponse<List<TrendingHashtagDto>>>(StatusCodes.Status200OK)]
     public async Task<GenericResponse<List<TrendingHashtagDto>>> GetTrending([FromQuery] int hours = 24)
     {
-        var trending = await _hashtagService.GetTrendingHashtagsAsync(hours);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: trending));
+        var rsp = await _hashtagService.GetTrendingHashtagsAsync(hours);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }

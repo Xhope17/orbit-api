@@ -1,12 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Orbit.WebApi.Constants;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
@@ -37,12 +36,9 @@ public class NotificationController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<PagedResult<NotificationDto>>> GetNotifications([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<NotificationDto>>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _notificationService.GetNotificationsAsync(profileId.Value, page, Math.Clamp(pageSize, 1, 100));
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _notificationService.GetNotificationsAsync(profileId, page, Math.Clamp(pageSize, 1, 100));
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpGet("api/notifications/unread-count")]
@@ -52,12 +48,9 @@ public class NotificationController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<int>> GetUnreadCount()
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<int>(default, message: ResponseMessages.InvalidToken));
-
-        var result = await _notificationService.GetUnreadCountAsync(profileId.Value);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _notificationService.GetUnreadCountAsync(profileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpPatch("api/notifications/{id:guid}/read")]
@@ -68,16 +61,9 @@ public class NotificationController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> MarkAsRead(Guid id)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
-
-        var result = await _notificationService.MarkAsReadAsync(profileId.Value, id);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _notificationService.MarkAsReadAsync(profileId, id);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpPatch("api/notifications/read-all")]
@@ -87,11 +73,8 @@ public class NotificationController : ControllerBase
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<string>> MarkAllAsRead()
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken));
-
-        var result = await _notificationService.MarkAllAsReadAsync(profileId.Value);
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _notificationService.MarkAllAsReadAsync(profileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }
