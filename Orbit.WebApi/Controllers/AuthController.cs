@@ -3,11 +3,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.WebApi.Models;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Models.Responses.Auth;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
@@ -85,7 +85,7 @@ public class AuthController : ControllerBase
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                        ?? User.FindFirst(ClaimConstants.Sub)?.Value;
         if (userIdClaim is null || !Guid.TryParse(userIdClaim, out var authUserId))
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
+            throw new UnauthorizedException(ResponseMessages.InvalidToken);
 
         var rsp = await _authService.GetCurrentUserAsync(authUserId);
         return ResponseStatus.Ok(HttpContext, rsp);

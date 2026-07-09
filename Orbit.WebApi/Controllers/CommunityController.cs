@@ -1,13 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.WebApi.Models;
+using Orbit.Application.Common;
 using Orbit.Application.Constants;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
-using Orbit.Application.Common;
-using Orbit.Application.Helpers;
 
 namespace Orbit.WebApi.Controllers;
 
@@ -31,15 +31,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status409Conflict)]
     public async Task<GenericResponse<CommunityDto>> Create([FromBody] CreateCommunityRequest request)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.CreateCommunityAsync(authUserId.Value, request.Name, request.Description, request.IsPrivate);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.CreateCommunityAsync(authUserId, request.Name, request.Description, request.IsPrivate);
         return ResponseStatus.Created(HttpContext, rsp);
     }
 
@@ -53,11 +46,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<CommunityDto>> Update(string slug, [FromBody] UpdateCommunityRequest request)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.UpdateCommunityAsync(authUserId.Value, slug, request.Name, request.Description, request.IsPrivate);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.UpdateCommunityAsync(authUserId, slug, request.Name, request.Description, request.IsPrivate);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -70,11 +60,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> Delete(string slug)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.DeleteCommunityAsync(authUserId.Value, slug);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.DeleteCommunityAsync(authUserId, slug);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -114,14 +101,10 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<PagedResult<CommunitySummaryDto>>>(StatusCodes.Status200OK)]
     public async Task<GenericResponse<PagedResult<CommunitySummaryDto>>> GetMyCommunities([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunitySummaryDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
-
-        var rsp = await _communityService.GetMyCommunitiesAsync(profileId.Value, page, pageSize);
+        var rsp = await _communityService.GetMyCommunitiesAsync(profileId, page, pageSize);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -134,11 +117,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> Join(string slug)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.JoinCommunityAsync(profileId.Value, slug);
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.JoinCommunityAsync(profileId, slug);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -151,11 +131,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> Leave(string slug)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.LeaveCommunityAsync(profileId.Value, slug);
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.LeaveCommunityAsync(profileId, slug);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -168,11 +145,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> KickMember(string slug, Guid targetProfileId)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.KickMemberAsync(authUserId.Value, slug, targetProfileId);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.KickMemberAsync(authUserId, slug, targetProfileId);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -186,11 +160,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> AssignCoLeader(string slug, string targetUsername)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.AssignCoLeaderAsync(authUserId.Value, slug, targetUsername);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.AssignCoLeaderAsync(authUserId, slug, targetUsername);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -204,11 +175,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> RemoveCoLeader(string slug, string targetUsername)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.RemoveCoLeaderAsync(authUserId.Value, slug, targetUsername);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.RemoveCoLeaderAsync(authUserId, slug, targetUsername);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -223,7 +191,6 @@ public class CommunityController : BaseController
     {
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
-
         var profileId = GetProfileId();
         var rsp = await _communityService.GetMembersAsync(slug, page, pageSize, profileId);
         return ResponseStatus.Ok(HttpContext, rsp);
@@ -238,11 +205,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<CommunityJoinRequestResponse>> RequestJoin(string slug)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<CommunityJoinRequestResponse>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.RequestJoinAsync(profileId.Value, slug);
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.RequestJoinAsync(profileId, slug);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -255,14 +219,10 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<PagedResult<CommunityJoinRequestResponse>>> GetJoinRequests(string slug, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
-
-        var rsp = await _communityService.GetJoinRequestsAsync(authUserId.Value, slug, page, pageSize);
+        var rsp = await _communityService.GetJoinRequestsAsync(authUserId, slug, page, pageSize);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -275,11 +235,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> ApproveJoinRequest(Guid requestId)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.ApproveJoinRequestAsync(authUserId.Value, requestId);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.ApproveJoinRequestAsync(authUserId, requestId);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -292,11 +249,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> RejectJoinRequest(Guid requestId)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.RejectJoinRequestAsync(authUserId.Value, requestId);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.RejectJoinRequestAsync(authUserId, requestId);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -307,14 +261,10 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<PagedResult<CommunityJoinRequestResponse>>>(StatusCodes.Status200OK)]
     public async Task<GenericResponse<PagedResult<CommunityJoinRequestResponse>>> GetMyJoinRequests([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityJoinRequestResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
-
-        var rsp = await _communityService.GetMyJoinRequestsAsync(profileId.Value, page, pageSize);
+        var rsp = await _communityService.GetMyJoinRequestsAsync(profileId, page, pageSize);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -328,11 +278,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> InviteMember(string slug, [FromBody] ModeratorRequest request)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.InviteMemberAsync(authUserId.Value, slug, request.Username);
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.InviteMemberAsync(authUserId, slug, request.Username);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -345,14 +292,10 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<PagedResult<CommunityInvitationResponse>>> GetCommunityInvitations(string slug, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
-
-        var rsp = await _communityService.GetCommunityInvitationsAsync(authUserId.Value, slug, page, pageSize);
+        var rsp = await _communityService.GetCommunityInvitationsAsync(authUserId, slug, page, pageSize);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -363,14 +306,10 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<PagedResult<CommunityInvitationResponse>>>(StatusCodes.Status200OK)]
     public async Task<GenericResponse<PagedResult<CommunityInvitationResponse>>> GetPendingInvitations([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<CommunityInvitationResponse>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         pageSize = Math.Clamp(pageSize, 1, 100);
         page = Math.Max(1, page);
-
-        var rsp = await _communityService.GetPendingInvitationsAsync(profileId.Value, page, pageSize);
+        var rsp = await _communityService.GetPendingInvitationsAsync(profileId, page, pageSize);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -383,11 +322,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> AcceptInvitation(Guid invitationId)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.AcceptInvitationAsync(profileId.Value, invitationId);
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.AcceptInvitationAsync(profileId, invitationId);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -400,11 +336,8 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<string>> DeclineInvitation(Guid invitationId)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var rsp = await _communityService.DeclineInvitationAsync(profileId.Value, invitationId);
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _communityService.DeclineInvitationAsync(profileId, invitationId);
         return ResponseStatus.Ok(HttpContext, rsp);
     }
 
@@ -419,12 +352,7 @@ public class CommunityController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<PostDto>> CreatePost(string slug, [FromForm] CreatePostRequest request)
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PostDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        if (string.IsNullOrWhiteSpace(request.Content))
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PostDto>(default, message: "Content is required", isSuccess: false));
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
 
         List<MediaUploadData>? mediaFiles = null;
         if (request.Media is not null && request.Media.Count > 0)
@@ -435,7 +363,7 @@ public class CommunityController : BaseController
                 .ToList();
         }
 
-        var rsp = await _communityService.CreateCommunityPostAsync(authUserId.Value, slug, request.Content, mediaFiles);
+        var rsp = await _communityService.CreateCommunityPostAsync(authUserId, slug, request.Content, mediaFiles);
         return ResponseStatus.Created(HttpContext, rsp);
     }
 

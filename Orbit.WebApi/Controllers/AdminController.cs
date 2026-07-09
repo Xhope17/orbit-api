@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Orbit.Application.Common;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
@@ -29,16 +28,9 @@ public class AdminController : BaseController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<GenericResponse<string>> AssignModerator([FromBody] ModeratorRequest request)
     {
-        var adminProfileId = GetProfileId();
-        if (adminProfileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _roleService.AssignModeratorAsync(adminProfileId.Value, request.Username);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var adminProfileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _roleService.AssignModeratorAsync(adminProfileId, request.Username);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [HttpDelete("api/admin/moderators/{username}")]
@@ -49,16 +41,9 @@ public class AdminController : BaseController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<GenericResponse<string>> RemoveModerator(string username)
     {
-        var adminProfileId = GetProfileId();
-        if (adminProfileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _roleService.RemoveModeratorAsync(adminProfileId.Value, username);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var adminProfileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _roleService.RemoveModeratorAsync(adminProfileId, username);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }
 

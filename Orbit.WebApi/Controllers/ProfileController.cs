@@ -1,13 +1,12 @@
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orbit.WebApi.Models;
 using Orbit.Application.Common;
 using Orbit.Application.Constants;
-using Orbit.Application.Helpers;
 using Orbit.Application.Models.Responses;
 using Orbit.Application.Models.DTOs;
 using Orbit.Application.Interfaces.Services;
+using Orbit.Domain.Exceptions;
 using Orbit.WebApi.Helpers;
 
 namespace Orbit.WebApi.Controllers;
@@ -15,14 +14,10 @@ namespace Orbit.WebApi.Controllers;
 public class ProfileController : BaseController
 {
     private readonly IProfileService _profileService;
-    private readonly IValidator<UpdateProfileRequest> _updateProfileValidator;
 
-    public ProfileController(
-        IProfileService profileService,
-        IValidator<UpdateProfileRequest> updateProfileValidator)
+    public ProfileController(IProfileService profileService)
     {
         _profileService = profileService;
-        _updateProfileValidator = updateProfileValidator;
     }
 
     [AllowAnonymous]
@@ -34,12 +29,8 @@ public class ProfileController : BaseController
     public async Task<GenericResponse<ProfileDto>> GetByUsername(string username)
     {
         var currentProfileId = GetProfileId();
-        var result = await _profileService.GetProfileByUsernameAsync(username, currentProfileId);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _profileService.GetProfileByUsernameAsync(username, currentProfileId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -52,23 +43,9 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<ProfileDto>> Update([FromBody] UpdateProfileRequest request)
     {
-        var validationResult = await _updateProfileValidator.ValidateAsync(request);
-        if (!validationResult.IsValid)
-        {
-            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, errors: [.. errors], message: ResponseMessages.ValidationFailed, isSuccess: false));
-        }
-
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _profileService.UpdateProfileAsync(authUserId.Value, request.DisplayName, request.Bio, request.IsPrivate);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.UpdateProfileAsync(authUserId, request.DisplayName, request.Bio, request.IsPrivate);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -80,20 +57,10 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<ProfileDto>> UpdateAvatar(IFormFile file)
     {
-        if (file is null || file.Length == 0)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.FileRequired, isSuccess: false));
-
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         using var stream = file.OpenReadStream();
-        var result = await _profileService.UpdateProfilePictureAsync(authUserId.Value, stream, file.FileName);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _profileService.UpdateProfilePictureAsync(authUserId, stream, file.FileName);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -105,16 +72,9 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<ProfileDto>> RemoveAvatar()
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _profileService.RemoveProfilePictureAsync(authUserId.Value);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.RemoveProfilePictureAsync(authUserId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -126,20 +86,10 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<ProfileDto>> UpdateBanner(IFormFile file)
     {
-        if (file is null || file.Length == 0)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.FileRequired, isSuccess: false));
-
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
         using var stream = file.OpenReadStream();
-        var result = await _profileService.UpdateBannerAsync(authUserId.Value, stream, file.FileName);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _profileService.UpdateBannerAsync(authUserId, stream, file.FileName);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -151,16 +101,9 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status404NotFound)]
     public async Task<GenericResponse<ProfileDto>> RemoveBanner()
     {
-        var authUserId = GetAuthUserId();
-        if (authUserId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _profileService.RemoveBannerAsync(authUserId.Value);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.NotFound(HttpContext, ResponseHelper.Create<ProfileDto>(default, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var authUserId = GetAuthUserId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.RemoveBannerAsync(authUserId);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -173,14 +116,9 @@ public class ProfileController : BaseController
     public async Task<GenericResponse<PagedResult<SearchProfileDto>>> Search(
         [FromQuery] string q, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        if (string.IsNullOrWhiteSpace(q))
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<PagedResult<SearchProfileDto>>(default, message: "Search query is required", isSuccess: false));
-
         var currentProfileId = GetProfileId();
-        var result = await _profileService.SearchProfilesAsync(
-            q, currentProfileId, page, Math.Clamp(pageSize, 1, 50));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var rsp = await _profileService.SearchProfilesAsync(q, currentProfileId, page, Math.Clamp(pageSize, 1, 50));
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -192,16 +130,9 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<string>> BlockUser(string username)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _profileService.BlockUserAsync(profileId.Value, username);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.BlockUserAsync(profileId, username);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -213,16 +144,9 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<string>> UnblockUser(string username)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<string>(null, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _profileService.UnblockUserAsync(profileId.Value, username);
-
-        if (!result.IsSuccess)
-            return ResponseStatus.BadRequest(HttpContext, ResponseHelper.Create<string>(null, message: result.Message, isSuccess: false));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create<string>(null, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.UnblockUserAsync(profileId, username);
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 
     [Authorize]
@@ -233,12 +157,8 @@ public class ProfileController : BaseController
     [ProducesResponseType<GenericResponse<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<GenericResponse<PagedResult<BlockedUserDto>>> GetBlockedUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var profileId = GetProfileId();
-        if (profileId is null)
-            return ResponseStatus.Unauthorized(HttpContext, ResponseHelper.Create<PagedResult<BlockedUserDto>>(default, message: ResponseMessages.InvalidToken, isSuccess: false));
-
-        var result = await _profileService.GetBlockedUsersAsync(profileId.Value, page, Math.Clamp(pageSize, 1, 50));
-
-        return ResponseStatus.Ok(HttpContext, ResponseHelper.Create(data: result.Data!, message: result.Message));
+        var profileId = GetProfileId() ?? throw new UnauthorizedException(ResponseMessages.InvalidToken);
+        var rsp = await _profileService.GetBlockedUsersAsync(profileId, page, Math.Clamp(pageSize, 1, 50));
+        return ResponseStatus.Ok(HttpContext, rsp);
     }
 }
