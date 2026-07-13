@@ -27,4 +27,5 @@ public static class EnvironmentConstants
     public const string BrevoApiKey = "BREVO_API_KEY";
     public const string FrontendUrl = "FRONTEND_URL";
     public const string FrontendUrlDev = "FRONTEND_URL_DEV";
+    public const string FrontendUrlAlt = "FRONTEND_URL_ALT";
 }
