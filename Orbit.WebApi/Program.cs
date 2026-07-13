@@ -17,10 +17,12 @@ if (File.Exists(envPath))
 
 var frontendUrl = Environment.GetEnvironmentVariable(EnvironmentConstants.FrontendUrl);
 var frontendUrlDev = Environment.GetEnvironmentVariable(EnvironmentConstants.FrontendUrlDev);
+var frontendUrlAlt = Environment.GetEnvironmentVariable(EnvironmentConstants.FrontendUrlAlt);
 
 var frontendUrls = new List<string>();
 if (!string.IsNullOrWhiteSpace(frontendUrl)) frontendUrls.Add(frontendUrl);
 if (!string.IsNullOrWhiteSpace(frontendUrlDev) && frontendUrlDev != frontendUrl) frontendUrls.Add(frontendUrlDev);
+if (!string.IsNullOrWhiteSpace(frontendUrlAlt) && frontendUrlAlt != frontendUrl && frontendUrlAlt != frontendUrlDev) frontendUrls.Add(frontendUrlAlt);
 
 if (frontendUrls.Count == 0)
     frontendUrls.Add("http://localhost:4200");
